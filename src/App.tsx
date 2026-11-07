@@ -5,6 +5,7 @@ import { SiteFooter } from './components/sections/ContactCTA'
 import { ContactCTA } from './components/sections/ContactCTA'
 import { Hero } from './components/sections/Hero'
 import { ProgramSelection } from './components/sections/ProgramSelection'
+import { FirstViewportBenefits } from './components/sections/FirstViewportBenefits'
 import { SundayPractice } from './components/sections/SundayPractice'
 import { LearningModesOverview } from './components/sections/LearningModesOverview'
 import { Roadmap } from './components/sections/Roadmap'
@@ -28,7 +29,8 @@ function ScrollToTop() {
 function HomePage() {
   return <div className="homepage-redesign">
     <Hero />
-    <ProgramSelection homepage title="Choose your programme." intro="Focused board preparation for Class 10 and Class 12, with a clear plan and guided support." eyebrow="YOUR NEXT STEP STARTS HERE" />
+    <ProgramSelection homepage title="Choose Your Programme" intro="Focused preparation for Class 10 and Class 12 board examinations with a clear plan and guided support." eyebrow="" />
+    <FirstViewportBenefits />
     <StudentChallenges />
     <PreparationSystem />
     <Roadmap />

@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { ArrowUpRight, Menu, X } from 'lucide-react'
-import { Link, NavLink } from 'react-router-dom'
+import { ArrowRight, Menu, X } from 'lucide-react'
+import { Link, NavLink, useLocation } from 'react-router-dom'
 import { Brand } from './Brand'
 
 const links = [
@@ -15,17 +15,18 @@ const links = [
 
 export function Header() {
   const [open, setOpen] = useState(false)
+  const isHome = useLocation().pathname === '/'
   return (
-    <header className="site-header">
+    <header className={`site-header${isHome ? ' home-site-header' : ''}`}>
       <div className="header-inner">
         <Brand />
         <button className="menu-toggle" aria-label={open ? 'Close navigation' : 'Open navigation'} aria-controls="main-navigation" aria-expanded={open} onClick={() => setOpen(!open)}>
           {open ? <X size={22} /> : <Menu size={22} />}
         </button>
         <nav id="main-navigation" className={`main-nav ${open ? 'is-open' : ''}`} aria-label="Main navigation">
-          {links.map(([label, href]) => <NavLink key={label} to={href} end={href === '/'} onClick={() => setOpen(false)}>{label}</NavLink>)}
+          {links.map(([label, href]) => <NavLink key={label} to={href} end={href === '/'} onClick={() => setOpen(false)}>{isHome && label === 'About' ? 'About the Programme' : label}</NavLink>)}
         </nav>
-        <Link className="nav-cta header-cta" to="/programs" onClick={() => setOpen(false)}>Explore Programmes <ArrowUpRight size={15} /></Link>
+        <Link className="nav-cta header-cta" to="/programs" onClick={() => setOpen(false)}>Explore Programmes <ArrowRight size={17} /></Link>
       </div>
     </header>
   )

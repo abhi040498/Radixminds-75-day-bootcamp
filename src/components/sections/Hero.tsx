@@ -1,12 +1,12 @@
-import { ArrowRight, BookOpenCheck, CalendarDays, ClipboardCheck, Clock3, FileText, GraduationCap, Phone, RefreshCw, Rocket } from 'lucide-react'
+import { ArrowRight, BookOpen, CalendarDays, ClipboardCheck, Clock3, GraduationCap, Layers, Phone, Rocket, Target } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { StudyIllustration } from '../StudyIllustration'
 
 const heroPoints = [
-  { Icon: BookOpenCheck, first: 'Structured', second: 'Classes' },
-  { Icon: ClipboardCheck, first: 'Guided', second: 'Practice' },
-  { Icon: FileText, first: 'Mock', second: 'Tests' },
-  { Icon: RefreshCw, first: 'Revision &', second: 'Doubt Support' },
+  { Icon: BookOpen, first: 'Structured', second: 'Classes' },
+  { Icon: Target, first: 'Guided', second: 'Practice' },
+  { Icon: ClipboardCheck, first: 'Mock', second: 'Tests' },
+  { Icon: Layers, first: 'Revision &', second: 'Doubt Support' },
 ]
 
 export function Hero() {
@@ -15,12 +15,12 @@ export function Hero() {
     <div className="hero-inner page-wrap">
       <div className="hero-copy">
         <p className="hero-location"><CalendarDays size={19} aria-hidden="true" /> RADIX MINDS | 75-DAY BOARD BOOTCAMP</p>
-        <h1 className="home-hero-title">You Don’t Have to Face Your Boards Alone.</h1>
+        <h1 className="home-hero-title"><span>You Don’t Have to Face</span><span>Your Boards Alone.</span></h1>
         <p className="hero-subtitle">Let’s Turn Your Preparation Into Confidence.</p>
         <p className="hero-description">Whether you need to strengthen your concepts, complete your syllabus, improve your answer-writing skills or become more confident before the examination, we provide a structured preparation journey to help you move forward.</p>
         <div className="hero-point-list" aria-label="Bootcamp features">{heroPoints.map(({ Icon, first, second }) => <span key={first}><Icon size={34} strokeWidth={2.1} /><span>{first}<br />{second}</span></span>)}</div>
         <div className="hero-actions">
-          <a className="button button-gold" href="#programs">Explore Class 10 &amp; 12 Programmes <ArrowRight size={17} /></a>
+          <a className="button button-gold" href="#programs">Explore Class 10 &amp; 12 Programmes <ArrowRight size={19} /></a>
           <Link className="button button-text-light" to="/contact">Talk to Our Team <Phone size={16} /></Link>
         </div>
         <p className="hero-punchline"><Rocket size={20} aria-hidden="true" /> Your potential is there. Let’s prepare to bring it out.</p>

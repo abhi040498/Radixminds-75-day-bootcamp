@@ -15,11 +15,15 @@ export const campaign = {
       code: 'class-10',
       grade: 'CLASS 10',
       subjects: ['Mathematics', 'Science', 'Social Science', 'English'],
+      fallbackFeePaise: 249900,
+      durationDays: 75,
     },
     {
       code: 'class-12',
       grade: 'CLASS 12',
       subjects: ['Physics', 'Chemistry', 'Mathematics or Biology'],
+      fallbackFeePaise: 349900,
+      durationDays: 75,
     },
   ],
   smartMethod: [
