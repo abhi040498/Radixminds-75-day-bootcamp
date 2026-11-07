@@ -4,7 +4,6 @@ import cors from 'cors'
 import helmet from 'helmet'
 import rateLimit from 'express-rate-limit'
 import Razorpay from 'razorpay'
-import { fileURLToPath } from 'node:url'
 import { z } from 'zod'
 import { config, boardOptions, languageOptions, hasAdminAuth, hasDatabase, hasRazorpay, checkoutBaseReady } from './config.js'
 import { getAuthClient, getDatabase } from './supabase.js'
@@ -520,20 +519,9 @@ const errorHandler: ErrorRequestHandler = (error, _req, res, _next) => {
   return fail(res, 500, 'INTERNAL_ERROR', 'Something went wrong. Please try again or contact the team.')
 }
 
-// Serve the Vite build from the same Node application in production. Keep API
-// misses JSON-only and let React Router handle public/admin client-side routes.
-const frontendBuildDir = fileURLToPath(new URL('../../dist/', import.meta.url))
-const frontendIndex = fileURLToPath(new URL('../../dist/index.html', import.meta.url))
-app.use('/api', (_req, res) => fail(res, 404, 'NOT_FOUND', 'API route was not found.'))
-app.use(express.static(frontendBuildDir, {
-  index: false,
-  maxAge: config.NODE_ENV === 'production' ? '1y' : 0,
-  immutable: config.NODE_ENV === 'production',
-}))
-app.use((req, res, next) => {
-  if (req.method !== 'GET' || req.path.startsWith('/api/')) return next()
-  return res.sendFile(frontendIndex, error => { if (error) next(error) })
-})
-app.use(errorHandler)
+// API fallthrough and error handling are attached by each runtime entry point.
+// The Netlify function adds only these API handlers; the Node server also adds
+// the static Vite frontend before them.
+const apiNotFoundHandler: express.RequestHandler = (_req, res) => fail(res, 404, 'NOT_FOUND', 'API route was not found.')
 
-export { app }
+export { app, apiNotFoundHandler, errorHandler }
