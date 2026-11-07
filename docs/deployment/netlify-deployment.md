@@ -46,7 +46,7 @@ Required/configurable server variable names:
 - `WHATSAPP_PHONE`
 - `TELEGRAM_URL`
 
-For documentation only, the credential-shaped variables use intentionally fake placeholders such as `YOUR_SUPABASE_URL`, `YOUR_SUPABASE_PUBLIC_KEY`, `YOUR_SUPABASE_SECRET_KEY`, and `YOUR_RANDOM_STATUS_TOKEN_SECRET`. These values are not usable credentials. Enter real values only in Netlify's protected environment-variable settings; do not copy them into source files.
+Sensitive values in `.env.example` are intentionally blank. Enter them only in Netlify's protected environment-variable settings; do not copy them into source files or documentation.
 
 Netlify supplies the function runtime; `PORT` is for the local/Hostinger listener and is not required by the function. Razorpay variables are recognized by the existing application but must remain payment-disabled in this phase: `RAZORPAY_MODE`, `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, and `RAZORPAY_WEBHOOK_SECRET`.
 
