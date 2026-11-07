@@ -4,10 +4,15 @@ import cors from 'cors'
 import helmet from 'helmet'
 import rateLimit from 'express-rate-limit'
 import Razorpay from 'razorpay'
+import { fileURLToPath } from 'node:url'
 import { z } from 'zod'
 import { config, boardOptions, languageOptions, hasAdminAuth, hasDatabase, hasRazorpay, checkoutBaseReady } from './config.js'
 import { getAuthClient, getDatabase } from './supabase.js'
 import { createStatusToken, csrfOriginGuard, newPublicReference, safeHexEqual, sha256, verifyHmac, validateRazorpayKeyMode } from './security.js'
+import { createRazorpayWebhookHandler } from './razorpayWebhook.js'
+import { razorpayWebhookStore } from './razorpayWebhookStore.js'
+import { policyVersions } from './policyVersions.js'
+import { policyAcknowledgementSchema, policyVersionsSchema } from './policyAcknowledgement.js'
 
 const app = express()
 app.disable('x-powered-by')
@@ -47,6 +52,14 @@ function isValidIndianMobile(value: string) {
 function validIdempotencyKey(value: string | undefined) {
   return Boolean(value && z.uuid().safeParse(value).success)
 }
+function verifiedDiscountPercent(program: { program_fee_paise: number; standard_fee_paise: number | null; discount_percent: number | null }) {
+  const payable = Number(program.program_fee_paise)
+  const standard = program.standard_fee_paise === null ? null : Number(program.standard_fee_paise)
+  const configured = program.discount_percent === null ? null : Number(program.discount_percent)
+  if (!Number.isSafeInteger(payable) || standard === null || !Number.isSafeInteger(standard) || standard <= payable || configured === null || !Number.isFinite(configured)) return null
+  const computed = Math.round(((standard - payable) / standard) * 10000) / 100
+  return Math.abs(computed - configured) <= 0.01 ? configured : null
+}
 
 const enrolmentSchema = z.object({
   programCode: z.enum(['class-10', 'class-12']),
@@ -57,16 +70,9 @@ const enrolmentSchema = z.object({
   board: z.string().trim().min(2).max(80),
   schoolName: z.string().trim().min(2).max(180),
   preferredLanguage: z.string().trim().max(50).optional(),
-  guardianName: z.string().trim().max(120).optional(),
-  guardianMobile: z.string().refine(value => value === '' || isValidIndianMobile(value), 'Enter a valid 10-digit Indian mobile number.').optional(),
-  guardianEmail: z.union([z.literal(''), z.email().max(180)]).optional(),
   subjectChoice: z.enum(['Mathematics', 'Biology']).nullable().optional(),
   learningMode: z.enum(['online', 'offline', 'hybrid']).nullable().optional(),
-  termsAccepted: z.literal(true),
-  privacyConsent: z.literal(true),
-  guardianConsent: z.literal(true),
-  communicationConsent: z.literal(true),
-})
+}).extend(policyAcknowledgementSchema.shape)
 
 const enquirySchema = z.object({
   fullName: z.string().trim().min(2).max(120),
@@ -78,52 +84,21 @@ const enquirySchema = z.object({
 })
 
 const razorpayWebhook = express.raw({ type: 'application/json', limit: '1mb' })
+async function markFailedPayment(db: ReturnType<typeof getDatabase>, paymentId: string, orderId: string) {
+  const { error: linkError } = await db.from('payments').update({ provider_payment_id: paymentId, updated_at: new Date().toISOString() }).eq('provider_order_id', orderId).in('status', ['created', 'authorized'])
+  if (linkError) throw linkError
+  const { error } = await db.rpc('mark_provider_payment_failed', { p_provider_payment_id: paymentId })
+  if (error) throw error
+}
+const handleRazorpayWebhook = createRazorpayWebhookHandler(config.RAZORPAY_WEBHOOK_SECRET, razorpayWebhookStore)
 app.post('/api/v1/webhooks/razorpay', razorpayWebhook, async (req, res) => {
-  const secret = config.RAZORPAY_WEBHOOK_SECRET
-  const signature = req.get('x-razorpay-signature') ?? ''
-  const eventId = req.get('x-razorpay-event-id')
-  if (!secret || !Buffer.isBuffer(req.body) || !verifyHmac(req.body, signature, secret) || !eventId) return res.status(400).json({ error: 'Invalid webhook signature or event id.' })
-  let payload: { event?: string; payload?: { payment?: { entity?: Record<string, unknown> }; order?: { entity?: Record<string, unknown> } } }
-  try { payload = JSON.parse(req.body.toString('utf8')) as typeof payload } catch { return res.status(400).json({ error: 'Invalid webhook JSON.' }) }
-  if (!payload.event) return res.status(400).json({ error: 'Missing event name.' })
-  if (!hasDatabase) return res.status(503).end()
-
-  const db = getDatabase()
-  const entity = payload.payload?.payment?.entity ?? payload.payload?.order?.entity ?? {}
-  const orderId = typeof entity.order_id === 'string' ? entity.order_id : (typeof entity.id === 'string' && payload.event === 'order.paid' ? entity.id : null)
-  const paymentId = typeof entity.id === 'string' && entity.id.startsWith('pay_') ? entity.id : null
-  const allowedPayload = { amount: typeof entity.amount === 'number' ? entity.amount : null, currency: typeof entity.currency === 'string' ? entity.currency : null, order_id: orderId, payment_id: paymentId }
-  const { data: existing } = await db.from('razorpay_webhook_events').select('id,processing_status').eq('provider_event_id', eventId).maybeSingle()
-  let eventRowId: string
-  if (existing) {
-    if (existing.processing_status === 'processed' || existing.processing_status === 'ignored') return res.status(200).json({ received: true, duplicate: true })
-    eventRowId = existing.id
-  } else {
-    const { data: inserted, error: insertError } = await db.from('razorpay_webhook_events').insert({ provider_event_id: eventId, event_type: payload.event, provider_order_id: orderId, provider_payment_id: paymentId, payload_redacted: allowedPayload, signature_valid: true }).select('id').single()
-    if (insertError || !inserted) {
-      if (insertError?.code === '23505') return res.status(200).json({ received: true, duplicate: true })
-      return res.status(503).end()
-    }
-    eventRowId = inserted.id
-  }
-
-  try {
-    if (payload.event === 'payment.captured' && orderId && paymentId && typeof entity.amount === 'number' && typeof entity.currency === 'string') {
-      const { error } = await db.rpc('confirm_captured_payment', { p_provider_order_id: orderId, p_provider_payment_id: paymentId, p_amount_paise: entity.amount, p_currency: entity.currency, p_signature_verified: true })
-      if (error) throw error
-    } else if (payload.event === 'payment.failed' && paymentId) {
-      await db.from('payments').update({ provider_payment_id: paymentId, status: 'failed', updated_at: new Date().toISOString() }).eq('provider_order_id', orderId).in('status', ['created', 'authorized'])
-    } else {
-      await db.from('razorpay_webhook_events').update({ processing_status: 'ignored', processed_at: new Date().toISOString() }).eq('id', eventRowId)
-      return res.status(200).json({ received: true, ignored: true })
-    }
-    await db.from('razorpay_webhook_events').update({ processing_status: 'processed', processed_at: new Date().toISOString(), processing_error: null }).eq('id', eventRowId)
-    return res.status(200).json({ received: true })
-  } catch (error) {
-    const note = error instanceof Error ? error.message.slice(0, 180) : 'Processing failed.'
-    await db.from('razorpay_webhook_events').update({ processing_status: 'error', processing_error: note }).eq('id', eventRowId)
-    return res.status(503).end()
-  }
+  if (!hasDatabase) return res.status(503).json({ error: 'Webhook processing is not available.' })
+  const result = await handleRazorpayWebhook({
+    rawBody: req.body,
+    signature: req.get('x-razorpay-signature'),
+    eventId: req.get('x-razorpay-event-id'),
+  })
+  return res.status(result.status).json(result.body)
 })
 
 app.use(express.json({ limit: '32kb' }))
@@ -137,14 +112,14 @@ app.get('/api/v1/programs', async (_req, res) => {
   if (error) return fail(res, 503, 'PROGRAMS_UNAVAILABLE', 'Program details are temporarily unavailable.')
   const programs = (data ?? []).map((program: Record<string, unknown>) => {
     const modes = (program.program_learning_modes as Array<{ mode: string; label: string; is_available: boolean; batch_label: string | null }> ?? []).filter(mode => mode.is_available).map(({ mode, label, batch_label }) => ({ mode, label, batchLabel: batch_label }))
-    return { code: program.code, name: program.name, durationDays: program.duration_days, subjects: program.subjects, payablePaise: program.program_fee_paise, standardPaise: program.standard_fee_paise, discountPercent: program.discount_percent, offerValidThrough: program.offer_valid_until, currency: program.currency, enrolmentOpen: program.enrolment_open, modes, checkoutReady: checkoutBaseReady && validateRazorpayKeyMode() && modes.length > 0 }
+    return { code: program.code, name: program.name, durationDays: program.duration_days, subjects: program.subjects, payablePaise: program.program_fee_paise, standardPaise: program.standard_fee_paise, discountPercent: verifiedDiscountPercent(program as { program_fee_paise: number; standard_fee_paise: number | null; discount_percent: number | null }), offerValidThrough: program.offer_valid_until, currency: program.currency, enrolmentOpen: program.enrolment_open, modes, checkoutReady: checkoutBaseReady && validateRazorpayKeyMode() && modes.length > 0 }
   })
   return res.json({ programs })
 })
 
 app.post('/api/v1/enrolments', publicLimiter, csrfOriginGuard, async (req, res) => {
   if (!hasDatabase) return databaseUnavailable(res)
-  if (!checkoutBaseReady || !validateRazorpayKeyMode()) return fail(res, 503, 'ENROLMENT_NOT_CONFIGURED', 'Online enrolment is not ready yet. Please contact Radix Minds to confirm the batch and current payment arrangements.')
+  if (config.POLICIES_APPROVED !== 'true') return fail(res, 503, 'POLICIES_NOT_APPROVED', 'Enrolment submissions are temporarily unavailable while the first-seven-day refund clause is finalized. Please contact Radix Minds.')
   const parsed = enrolmentSchema.safeParse(req.body)
   if (!parsed.success) return fail(res, 422, 'VALIDATION_ERROR', 'Please check the highlighted fields and try again.', Object.fromEntries(parsed.error.issues.map(issue => [String(issue.path[0] ?? 'form'), issue.message])))
   const idempotencyKey = req.get('idempotency-key')
@@ -168,7 +143,7 @@ app.post('/api/v1/enrolments', publicLimiter, csrfOriginGuard, async (req, res) 
   const subjectList = program.code === 'class-10'
     ? ['Mathematics', 'Science', 'Social Science', 'English']
     : input.subjectChoice ? ['Physics', 'Chemistry', input.subjectChoice] : ['Physics', 'Chemistry', 'Mathematics or Biology (to be confirmed)']
-  const priceSnapshot = { currency: program.currency, payable_paise: program.program_fee_paise, standard_paise: program.standard_fee_paise, discount_percent: program.discount_percent, offer_valid_until: program.offer_valid_until }
+  const priceSnapshot = { currency: program.currency, payable_paise: program.program_fee_paise, standard_paise: program.standard_fee_paise, discount_percent: verifiedDiscountPercent(program), offer_valid_until: program.offer_valid_until }
   const programSnapshot = { code: program.code, name: program.name, duration_days: program.duration_days, learning_mode: input.learningMode ?? null, learning_mode_label: selectedMode?.label ?? 'To be confirmed with Radix Minds' }
   const statusToken = createStatusToken(idempotencyKey!)
   const rpcInput = {
@@ -178,15 +153,21 @@ app.post('/api/v1/enrolments', publicLimiter, csrfOriginGuard, async (req, res) 
     mobile_e164: normalizeIndiaMobile(input.mobile),
     email: input.email.toLowerCase(),
     date_of_birth: input.dateOfBirth || '',
-    guardian_name: input.guardianName || null,
-    guardian_mobile_e164: input.guardianMobile ? normalizeIndiaMobile(input.guardianMobile) : null,
-    guardian_email: input.guardianEmail?.toLowerCase() || '',
+    guardian_name: null,
+    guardian_mobile_e164: null,
+    guardian_email: '',
     program_id: program.id,
     board: input.board,
     school_name: input.schoolName,
     preferred_language: input.preferredLanguage || null,
     subject_choice: input.subjectChoice ?? '',
     learning_mode: input.learningMode ?? null,
+    terms_accepted: input.termsAccepted,
+    privacy_consent: input.privacyConsent,
+    refund_policy_accepted: input.refundPolicyAccepted,
+    terms_policy_version: input.policyVersions.terms,
+    privacy_policy_version: input.policyVersions.privacy,
+    refund_policy_version: input.policyVersions.refund,
     program_snapshot: programSnapshot,
     subjects_snapshot: subjectList,
     pricing_snapshot: priceSnapshot,
@@ -195,7 +176,8 @@ app.post('/api/v1/enrolments', publicLimiter, csrfOriginGuard, async (req, res) 
   const { data: result, error } = await db.rpc('create_pending_enrolment', { p_input: rpcInput })
   const created = Array.isArray(result) ? result[0] : result
   if (error || !created?.enrolment_id || !created.public_reference) return fail(res, 503, 'REGISTRATION_SAVE_FAILED', 'We could not save your registration just now. Please try again or contact the team.')
-  return res.status(201).json({ enrolmentReference: created.public_reference, statusToken, status: 'pending_payment', message: 'Your details are saved. Continue to secure payment.' })
+  const checkoutReady = checkoutBaseReady && validateRazorpayKeyMode()
+  return res.status(201).json({ enrolmentReference: created.public_reference, statusToken, status: 'pending_payment', paymentStatus: 'pending', checkoutReady, message: checkoutReady ? 'Your details are saved. Continue to secure payment.' : 'Your enrolment request is saved. Payment is pending; the team will share the next step.' })
 })
 
 function getEnrollmentByToken(reference: string, token: string) {
@@ -266,7 +248,7 @@ app.post('/api/v1/payments/verify', checkoutLimiter, csrfOriginGuard, async (req
       return res.json({ status: 'confirmed', enrolmentReference: enrollment.public_reference, paymentReference: providerPayment.id, amountPaise: providerPayment.amount, currency: providerPayment.currency })
     }
     if (providerPayment.status === 'failed') {
-      await db.from('payments').update({ provider_payment_id: providerPayment.id, status: 'failed', updated_at: new Date().toISOString() }).eq('id', paymentRow.id).neq('status', 'captured')
+      await markFailedPayment(db, providerPayment.id, paymentRow.provider_order_id)
       return res.status(202).json({ status: 'failed', message: 'The payment was not completed. You may safely retry checkout.' })
     }
     await db.from('payments').update({ provider_payment_id: providerPayment.id, status: 'authorized', provider_signature_verified_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', paymentRow.id).neq('status', 'captured')
@@ -291,7 +273,7 @@ app.get('/api/v1/enrolments/:reference/status', publicLimiter, async (req, res) 
       if (captured) await db.rpc('confirm_captured_payment', { p_provider_order_id: payment.provider_order_id, p_provider_payment_id: captured.id, p_amount_paise: captured.amount, p_currency: captured.currency, p_signature_verified: true })
       else {
         const failed = attempts.items.find(item => item.status === 'failed')
-        if (failed) await db.from('payments').update({ provider_payment_id: failed.id, status: 'failed', updated_at: new Date().toISOString() }).eq('provider_order_id', payment.provider_order_id).in('status', ['created','authorized'])
+        if (failed) await markFailedPayment(db, failed.id, payment.provider_order_id)
       }
     } catch { /* Webhook/callback can resolve the pending state later. */ }
   }
@@ -366,6 +348,7 @@ const adminListQuery = z.object({
   program: z.enum(['class-10','class-12']).optional(),
   status: z.enum(['pending_payment','confirmed','cancelled','refunded','needs_review']).optional(),
   paymentStatus: z.enum(['creating','order_failed','created','authorized','captured','failed','cancelled','needs_review','unpaid','recorded_paid','not_started']).optional(),
+  learningMode: z.enum(['online','hybrid','offline']).optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(30),
 })
@@ -373,11 +356,12 @@ async function getAdminEnrolmentPage(req: express.Request, page: number, pageSiz
   const params = adminListQuery.safeParse({ ...req.query, page, pageSize })
   if (!params.success) throw new Error('INVALID_ADMIN_FILTER')
   const term = params.data.search?.replace(/[%_,*()]/g, ' ').trim().slice(0, 100) || null
-  const { data, error } = await getDatabase().rpc('admin_enrolment_page', {
+  const { data, error } = await getDatabase().rpc(params.data.learningMode ? 'admin_enrolment_page_by_mode' : 'admin_enrolment_page', {
     p_search: term,
     p_program: params.data.program ?? null,
     p_enrolment_status: params.data.status ?? null,
     p_payment_status: params.data.paymentStatus ?? null,
+    ...(params.data.learningMode ? { p_learning_mode: params.data.learningMode } : {}),
     p_page: params.data.page,
     p_page_size: params.data.pageSize,
   })
@@ -460,13 +444,14 @@ const manualEnrolmentSchema = z.object({
   fullName: z.string().trim().min(2).max(120), mobile: z.string().refine(isValidIndianMobile), email: z.email().max(180),
   programCode: z.enum(['class-10','class-12']), board: z.string().trim().min(2).max(80), schoolName: z.string().trim().min(2).max(180),
   dateOfBirth: z.union([z.literal(''),z.iso.date()]).optional(), preferredLanguage: z.string().trim().max(50).optional(),
-  guardianName: z.string().trim().max(120).optional(), guardianMobile: z.string().refine(value => value === '' || isValidIndianMobile(value)).optional(), guardianEmail: z.union([z.literal(''),z.email().max(180)]).optional(),
   subjectChoice: z.enum(['Mathematics','Biology']).nullable().optional(), learningMode: z.enum(['online','offline','hybrid']).nullable().optional(),
   manualPaymentStatus: z.enum(['unpaid','recorded_paid']), manualPaymentReference: z.string().trim().max(160).optional(),
   internalRemarks: z.string().max(4000).optional(), consentsRecorded: z.literal(true),
+  policyVersions: policyVersionsSchema,
 })
 app.post('/api/v1/admin/manual-enrolments', requireAdmin, csrfOriginGuard, async (req,res) => {
   if (!canManageEnrolments(res)) return fail(res,403,'ADMIN_ROLE_RESTRICTED','This admin role cannot create manual enrolments.')
+  if (config.POLICIES_APPROVED !== 'true') return fail(res,503,'POLICIES_NOT_APPROVED','Manual enrolment creation is paused until the first-seven-day refund clause is finalized.')
   const parsed = manualEnrolmentSchema.safeParse(req.body)
   if (!parsed.success) return fail(res,422,'VALIDATION_ERROR','Check the student, program and consent details before saving.')
   const input = parsed.data
@@ -481,10 +466,12 @@ app.post('/api/v1/admin/manual-enrolments', requireAdmin, csrfOriginGuard, async
   const subjects = input.programCode === 'class-10' ? ['Mathematics','Science','Social Science','English'] : input.subjectChoice ? ['Physics','Chemistry',input.subjectChoice] : ['Physics','Chemistry','Mathematics or Biology (to be confirmed)']
   const { data: created, error: createError } = await db.rpc('create_admin_manual_enrolment',{p_input:{
     admin_user_id:admin.id,idempotency_key:randomUUID(),public_reference:newPublicReference(),full_name:input.fullName,mobile_e164:normalizeIndiaMobile(input.mobile),email:input.email.toLowerCase(),
-    date_of_birth:input.dateOfBirth || '',guardian_name:input.guardianName || '',guardian_mobile_e164:input.guardianMobile ? normalizeIndiaMobile(input.guardianMobile) : '',guardian_email:input.guardianEmail?.toLowerCase() || '',
+    date_of_birth:input.dateOfBirth || '',guardian_name:'',guardian_mobile_e164:'',guardian_email:'',
     program_id:program.id,board:input.board,school_name:input.schoolName,preferred_language:input.preferredLanguage || '',subject_choice:input.subjectChoice || '',learning_mode:input.learningMode || '',
+    terms_policy_version:input.policyVersions.terms,privacy_policy_version:input.policyVersions.privacy,refund_policy_version:input.policyVersions.refund,
+    consents_recorded:input.consentsRecorded,
     program_snapshot:{code:program.code,name:program.name,duration_days:program.duration_days,learning_mode:input.learningMode || null,learning_mode_label:selectedMode?.label ?? 'To be confirmed with Radix Minds'},
-    subjects_snapshot:subjects,pricing_snapshot:{currency:program.currency,payable_paise:program.program_fee_paise,standard_paise:program.standard_fee_paise,discount_percent:program.discount_percent},
+    subjects_snapshot:subjects,pricing_snapshot:{currency:program.currency,payable_paise:program.program_fee_paise,standard_paise:program.standard_fee_paise,discount_percent:verifiedDiscountPercent(program)},
     status_token_hash:sha256(randomUUID()),internal_remarks:input.internalRemarks || '',manual_payment_status:input.manualPaymentStatus,manual_payment_reference:input.manualPaymentReference || '',
   }})
   const record = Array.isArray(created) ? created[0] : created
@@ -532,8 +519,21 @@ const errorHandler: ErrorRequestHandler = (error, _req, res, _next) => {
   console.error('api_error', { requestId: res.locals.requestId, name: error instanceof Error ? error.name : 'unknown' })
   return fail(res, 500, 'INTERNAL_ERROR', 'Something went wrong. Please try again or contact the team.')
 }
+
+// Serve the Vite build from the same Node application in production. Keep API
+// misses JSON-only and let React Router handle public/admin client-side routes.
+const frontendBuildDir = fileURLToPath(new URL('../../dist/', import.meta.url))
+const frontendIndex = fileURLToPath(new URL('../../dist/index.html', import.meta.url))
+app.use('/api', (_req, res) => fail(res, 404, 'NOT_FOUND', 'API route was not found.'))
+app.use(express.static(frontendBuildDir, {
+  index: false,
+  maxAge: config.NODE_ENV === 'production' ? '1y' : 0,
+  immutable: config.NODE_ENV === 'production',
+}))
+app.use((req, res, next) => {
+  if (req.method !== 'GET' || req.path.startsWith('/api/')) return next()
+  return res.sendFile(frontendIndex, error => { if (error) next(error) })
+})
 app.use(errorHandler)
 
-app.listen(config.PORT, '0.0.0.0', () => {
-  console.log(`Radix Minds API listening on ${config.PORT}; database=${hasDatabase}; razorpay=${hasRazorpay}; paymentMode=${config.RAZORPAY_MODE}`)
-})
+export { app }

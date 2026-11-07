@@ -1,22 +1,21 @@
-import { ArrowRight, BookOpenCheck, Check, ClipboardCheck, Target, Trophy, ChartNoAxesCombined } from 'lucide-react'
+import { ArrowRight, BookOpenCheck, Check, ClipboardCheck, Target } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { SectionHeading } from '../SectionHeading'
-import { campaign } from '../../data/campaign'
 
-const icons = [ClipboardCheck, BookOpenCheck, Target, ChartNoAxesCombined, Trophy]
-const phasePointers = [
-  ['Review current understanding', 'Set subject priorities'],
-  ['Build concepts through guided lessons', 'Revisit key learning'],
-  ['Apply concepts in board-style practice', 'Use revision to address gaps'],
-  ['Practise complete subject papers', 'Review timing and responses'],
-  ['Attempt full-syllabus mocks', 'Focus final revision'],
+const phases = [
+  { name: 'BUILD', days: 'Days 1–25', tone: 'build', Icon: BookOpenCheck, focus: 'Find a clear starting point and strengthen the foundation.', outcomes: ['Review preparation and set priorities', 'Revisit foundational concepts', 'Begin structured subject-wise learning'] },
+  { name: 'MASTER', days: 'Days 26–50', tone: 'master', Icon: Target, focus: 'Keep learning moving through focused practice and review.', outcomes: ['Continue topic coverage', 'Practise subject-wise questions', 'Identify topics to revisit'] },
+  { name: 'PERFORM', days: 'Days 51–75', tone: 'perform', Icon: ClipboardCheck, focus: 'Bring learning together through revision and board-style practice.', outcomes: ['Strengthen revision', 'Attempt full-syllabus mock tests', 'Review mistakes and refine exam readiness'] },
 ]
 
 export function Roadmap() {
-  return <section className="roadmap-section section-pad" id="roadmap"><div className="page-wrap">
-    <div className="roadmap-head"><SectionHeading eyebrow="THE 75-DAY ROADMAP" title="A clear path from revision to readiness." intro="Five focused phases build toward 10 days of full-syllabus mock tests." /><div className="roadmap-number"><span>75</span><small>days of<br />focused prep</small></div></div>
-    <div className="roadmap-journey-labels"><span><b>DAYS 1–60</b><small>Learn, practise and revise</small></span><i /><span><b>DAYS 61–75</b><small>Subject and full-syllabus mocks</small></span></div>
-    <div className="roadmap-track">{campaign.roadmap.map(({ phase, days, title, tone }, index) => { const Icon = icons[index]; return <article className={`roadmap-step ${tone}`} key={phase}><div className="phase-card"><span className="phase-index">0{index + 1}</span><div className="phase-top"><span>{phase}</span><small>{days}</small></div><Icon size={25} strokeWidth={1.7} /><h3>{title}</h3><ul className="phase-pointers">{phasePointers[index].map(point => <li key={point}><Check size={13} />{point}</li>)}</ul></div></article> })}</div>
-    <div className="roadmap-finale"><div className="finale-days"><span>15</span><small>MOCK<br />DAYS</small></div><div><span className="step-label">DAYS 61–75 · MOCK TESTS & FINAL PREPARATION</span><h3>Bring the whole syllabus together.</h3><p>Subject-wise and full-syllabus practice help students review pacing, responses and revision priorities.</p></div><a href="#programs" aria-label="Explore programs"><ArrowRight size={18} /></a></div>
-    <div className="roadmap-note"><span>75 DAYS · A PROPOSED PREPARATION FRAMEWORK</span><p>Subject allocation and academic schedule follow the finalized faculty timetable.</p></div>
+  return <section className="roadmap-section section-pad" id="roadmap" aria-labelledby="home-roadmap-title"><div className="page-wrap">
+    <div className="roadmap-head"><SectionHeading eyebrow="THE 75-DAY ROADMAP" title="75 days. One clear roadmap. A more confident you." titleId="home-roadmap-title" intro="Three focused phases bring preparation from a clear starting point to more confident board-style practice." /><div className="roadmap-number"><span>75</span><small>days of<br />focused preparation</small></div></div>
+    <div className="home-phase-grid">{phases.map(({ name, days, tone, Icon, focus, outcomes }, index) => <article className={`home-phase-card phase-${tone}`} key={name}>
+      <div className="home-phase-top"><span className="home-phase-icon"><Icon size={22} /></span><span>PHASE 0{index + 1}</span></div>
+      <p className="home-phase-days">{days}</p><h3>{name}</h3><p className="home-phase-focus">{focus}</p>
+      <ul>{outcomes.map(item => <li key={item}><Check size={14} />{item}</li>)}</ul>
+    </article>)}</div>
+    <div className="home-roadmap-foot"><p>Phase focus is a homepage-level guide. The academic timetable and subject allocation follow the finalized programme schedule.</p><Link to="/programs">Explore programme details <ArrowRight size={16} /></Link></div>
   </div></section>
 }

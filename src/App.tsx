@@ -1,18 +1,19 @@
 import { useEffect } from 'react'
-import { Route, Routes, useLocation } from 'react-router-dom'
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { Header } from './components/Header'
 import { SiteFooter } from './components/sections/ContactCTA'
-import { About } from './components/sections/About'
 import { ContactCTA } from './components/sections/ContactCTA'
-import { FAQs } from './components/sections/FAQs'
 import { Hero } from './components/sections/Hero'
-import { ExperienceStrip, FacultyIntro, LearningExperience, SmartStrategy } from './components/sections/LearningExperience'
-import { ParentTrust } from './components/sections/ParentTrust'
 import { ProgramSelection } from './components/sections/ProgramSelection'
+import { SundayPractice } from './components/sections/SundayPractice'
+import { LearningModesOverview } from './components/sections/LearningModesOverview'
 import { Roadmap } from './components/sections/Roadmap'
+import { FAQs } from './components/sections/FAQs'
+import { LearningHours, PreparationSystem, ProgramValue, StudentChallenges } from './components/sections/HomepageEditorial'
+import { ParentTrust } from './components/sections/ParentTrust'
 import {
   AboutPage, Class10Page, Class12Page, ContactPage, FAQsPage, FacultyPage,
-  MethodologyPage, MockTestsPage, NotFoundPage, ProgramsPage, RoadmapPage,
+  MethodologyPage, MockTestsPage, NotFoundPage, ProgramsPage,
 } from './pages/PublicPages'
 import { EnrolmentConfirmationPage, EnrolmentPage } from './pages/Enrolment'
 import { AdminPage } from './pages/Admin'
@@ -25,19 +26,20 @@ function ScrollToTop() {
 }
 
 function HomePage() {
-  return <>
+  return <div className="homepage-redesign">
     <Hero />
-    <ProgramSelection />
-    <About />
-    <SmartStrategy />
+    <ProgramSelection homepage title="Choose your programme." intro="Focused board preparation for Class 10 and Class 12, with a clear plan and guided support." eyebrow="YOUR NEXT STEP STARTS HERE" />
+    <StudentChallenges />
+    <PreparationSystem />
     <Roadmap />
-    <LearningExperience />
-    <ExperienceStrip />
-    <FacultyIntro />
+    <LearningHours />
+    <LearningModesOverview />
+    <SundayPractice />
+    <ProgramValue />
     <ParentTrust />
     <FAQs />
     <ContactCTA />
-  </>
+  </div>
 }
 
 export default function App() {
@@ -52,7 +54,6 @@ export default function App() {
         <Route path="/programs" element={<ProgramsPage />} />
         <Route path="/programs/class-10" element={<Class10Page />} />
         <Route path="/programs/class-12" element={<Class12Page />} />
-        <Route path="/roadmap" element={<RoadmapPage />} />
         <Route path="/teaching-methodology" element={<MethodologyPage />} />
         <Route path="/mock-tests" element={<MockTestsPage />} />
         <Route path="/faculty" element={<FacultyPage />} />
@@ -61,8 +62,11 @@ export default function App() {
         <Route path="/enrol" element={<EnrolmentPage />} />
         <Route path="/enrol/confirmation" element={<EnrolmentConfirmationPage />} />
         <Route path="/admin" element={<AdminPage />} />
-        <Route path="/terms" element={<LegalPage kind="terms" />} />
-        <Route path="/privacy" element={<LegalPage kind="privacy" />} />
+        <Route path="/terms-and-conditions" element={<LegalPage kind="terms" />} />
+        <Route path="/privacy-policy" element={<LegalPage kind="privacy" />} />
+        <Route path="/refund-policy" element={<LegalPage kind="refund" />} />
+        <Route path="/terms" element={<Navigate to="/terms-and-conditions" replace />} />
+        <Route path="/privacy" element={<Navigate to="/privacy-policy" replace />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </main>

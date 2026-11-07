@@ -1,21 +1,17 @@
 import { ArrowRight, CircleHelp } from 'lucide-react'
 
 const homeQuestions = [
-  ['What is the 75-Day Board Bootcamp?', 'A focused preparation program for Class 10 and Class 12 that brings structured lectures, revision notes, practice and mock tests together in a 75-day plan.'],
-  ['Who can join, and which subjects are covered?', 'Class 10 includes Mathematics, Science, Social Science and English. Class 12 includes Physics, Chemistry and a choice of Mathematics or Biology.'],
-  ['I feel behind in my preparation. Is it too late to start?', 'The bootcamp is designed for focused board preparation in a short timeframe. The roadmap moves through concept revision, topic-wise practice and mock tests. Contact the team to discuss whether the timing suits your student.'],
-  ['What is included in the program fee?', 'The program includes structured lectures, study notes for revision and practice, topic-wise mock tests, complete subject mock tests, and final examination preparation.'],
-  ['How are the 75 days organised?', 'The proposed roadmap moves from diagnostic assessment and planning (Days 1–7), to structured learning (Days 8–45), practice and revision (Days 46–60), subject-wise mock tests (Days 61–68), and full-syllabus mocks with final preparation (Days 69–75). The academic schedule is subject to the finalized faculty timetable.'],
-  ['How do the mock tests work?', 'The preparation plan includes topic-wise tests, subject-wise mock tests and full-syllabus mock tests. Online or offline options and the timetable will be confirmed by the team.'],
-  ['Can students study online or offline?', 'Online and offline testing options are available. Contact the team to confirm the current learning arrangements and what works for your student.'],
-  ['How will I know my child’s progress?', 'Mock tests are part of the preparation plan. Please ask the team how test feedback and next steps will be shared with families.'],
-  ['Will students get study notes?', 'Yes. Study notes and revision materials are included for revision and practice.'],
-  ['Why is the cohort limited to 30 seats?', 'The cohort has a defined maximum capacity of 30 students. Contact the team to check current availability before enrolling.'],
-  ['How do I enrol?', 'Choose the relevant class program, then contact Radix Minds. The team will confirm current availability, the program details and the next steps.'],
-  ['How does payment work?', 'The team will share the confirmed fee and available payment instructions during enrolment. Please confirm offer availability and the final amount before paying.'],
-  ['How will communication work after enrolment?', 'The team will coordinate academic communication with enrolled students through WhatsApp and Telegram. Details will be shared during enrolment.'],
-  ['Do students need to join WhatsApp or Telegram?', 'Students will be asked to use the WhatsApp and Telegram communication channels shared by the Radix Minds team after enrolment.'],
-  ['Is the 80% OFF offer for a limited time?', 'The 80% offer is presented as a limited-time promotion. Offer availability and validity can change, so confirm the current terms with the team before enrolling.'],
+  ['Who can join the 75-day bootcamp?', 'The bootcamp offers separate preparation programmes for students in Class 10 and Class 12.'],
+  ['Is this suitable if my syllabus is unfinished?', 'The programme brings structured lessons, practice and revision into a defined preparation period. Ask the Radix Minds team whether the current batch plan fits your subjects and preparation needs; syllabus coverage follows the finalized teaching plan.'],
+  ['Which subjects are covered in Class 10?', 'Mathematics, Science, Social Science and English.'],
+  ['What are the Class 12 PCM and PCB options?', 'PCM includes Physics, Chemistry and Mathematics. PCB includes Physics, Chemistry and Biology. Choose one pathway.'],
+  ['How are the 75 days structured?', 'The preparation moves through three broad phases: Build, Master and Perform. The published programme timetable guides the actual subject sessions.'],
+  ['What does the 300-hour learning commitment include?', 'The 300 hours describe the guided learning journey across the programme, combining lessons, practice, assessments and revision support. No hour-by-hour allocation is stated here.'],
+  ['Are Online, Hybrid and Offline academically identical?', 'Yes. All three modes follow the same academic structure, subjects, timetable, curriculum, faculty standards, materials, assessments, support and programme benefits. Only the method of participation differs.'],
+  ['What is the weekly timetable?', 'Class 10 weekday sessions are 4:00–6:30 PM for Mathematics and Science on alternate days, and 6:30–8:00 PM for Social Science and English. Class 12 weekday sessions are 4:00–8:00 PM for Physics, Chemistry and the selected Mathematics or Biology pathway on alternate days. Sunday sessions for both run 10:00 AM–4:00 PM for practice, revision and doubt clearing. Exact weekday subject allocation follows the finalized faculty timetable.'],
+  ['Are mock tests and revision materials included?', 'The preparation includes topic-wise and subject/full-syllabus mock tests, along with study notes and revision materials for practice.'],
+  ['How can I contact Radix Minds?', 'Call 9304829718 or email support@bootcamp.radixminds.in. You can also use the contact form to send a programme enquiry.'],
+  ['What are the fees and refund conditions?', 'The current fees are displayed on the relevant programme cards and detail pages using the programme data. Refund eligibility and request steps are set out in the Refund and Cancellation Policy. The first-seven-day prorated refund calculation remains subject to discussion; no calculation has been agreed.'],
 ]
 
 const programQuestions = [
@@ -25,10 +21,10 @@ const programQuestions = [
   ['How will the program help me practise for board exams?', 'Students work through topic-wise practice, subject-wise tests and full-syllabus mock tests. These are intended to help students become familiar with question formats, practise time management and identify areas to revisit.'],
   ['Will I receive notes and revision support?', 'Study notes and revision materials are included to support practice and review. The team will share details about how these materials are provided during enrolment.'],
   ['Who teaches the classes?', 'Classes are guided by experienced teachers. Faculty introductions and subject allocations will be shared by Radix Minds once the timetable is finalized; we do not publish unconfirmed profiles.'],
-  ['Can I choose online or offline learning?', 'Online and offline testing options are available. Contact the team to confirm the current learning arrangements and what is available for your cohort.'],
+  ['Can I choose online, hybrid or offline learning?', 'All three options are available: Online live classes, Hybrid online and classroom participation, and Offline classroom training. They share the same academic program and published timetable. The team will coordinate Hybrid participation details.'],
   ['How can my parent or guardian understand the program?', 'Parents are welcome to discuss the subjects, roadmap, learning arrangements, fee and offer terms with the team before making an enrolment decision.'],
   ['Where can I see the program fee?', 'The current fee is listed on the individual Class 10 and Class 12 program pages. Confirm the final amount and current 80% offer terms with Radix Minds before payment.'],
-  ['What happens after I enrol?', 'The team will confirm the next steps and coordinate academic communication with enrolled students through WhatsApp and Telegram.'],
+  ['What happens after I enrol?', 'You receive an enrolment reference. Until payment is verified, the request remains pending payment and is not a confirmed paid enrolment. The team will share the next step and coordinate academic communication through official WhatsApp and Telegram channels.'],
 ]
 
 export function FAQs({ variant = 'home' }: { variant?: 'home' | 'programs' }) {

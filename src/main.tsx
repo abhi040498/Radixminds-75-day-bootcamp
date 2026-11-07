@@ -5,6 +5,10 @@ import App from './App'
 import './styles.css'
 import './redesign.css'
 import './enrolment.css'
+import './bootcamp.css'
+import './enhancements.css'
+import './home.css'
+import './homepage-redesign.css'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

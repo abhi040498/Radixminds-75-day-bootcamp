@@ -1,10 +1,17 @@
-import { ArrowUpRight, HeartHandshake, ShieldCheck, Waypoints } from 'lucide-react'
+import { ArrowUpRight, BookOpenCheck, CalendarDays, CircleHelp, ClipboardCheck, CreditCard, HeartHandshake } from 'lucide-react'
 import { SectionHeading } from '../SectionHeading'
 
 export function ParentTrust() {
-  return <section className="parent-section section-pad"><div className="page-wrap parent-layout"><div className="parent-mark"><div className="parent-mark-circle"><HeartHandshake size={33} strokeWidth={1.3} /></div><span>BUILT AROUND<br />A CLEARER PLAN</span></div>
-    <div className="parent-copy"><SectionHeading eyebrow="PEACE OF MIND FOR FAMILIES" title="Why parents trust Radix Minds." intro="A clear preparation plan, transparent program details and a team families can speak with before they decide." />
-      <div className="parent-points"><div><ShieldCheck size={18} /><span>Know the subjects, duration and fee before enrolling.</span></div><div><Waypoints size={18} /><span>See how the 75-day plan moves from revision to mock tests.</span></div><div><HeartHandshake size={18} /><span>Speak with the team to ask questions and understand next steps.</span></div></div>
+  const points = [
+    { Icon: BookOpenCheck, text: 'Clear programme and subject information.' },
+    { Icon: CalendarDays, text: 'A published class timetable and defined preparation roadmap.' },
+    { Icon: ClipboardCheck, text: 'Practice and assessment structure explained before you decide.' },
+    { Icon: CreditCard, text: 'Transparent programme fees and three learning modes.' },
+    { Icon: CircleHelp, text: 'A team available for programme-related questions.' },
+  ]
+  return <section className="parent-section section-pad"><div className="page-wrap parent-layout"><div className="parent-mark"><div className="parent-mark-circle"><HeartHandshake size={33} strokeWidth={1.3} /></div><span>CLARITY FOR<br />THE WHOLE FAMILY</span></div>
+    <div className="parent-copy"><SectionHeading eyebrow="FOR PARENTS & FAMILIES" title="A more structured preparation journey. Greater clarity for you as a parent." intro="We understand that board examinations matter to the entire family. You want your child to prepare sincerely, understand their subjects and approach examinations with confidence." />
+      <div className="parent-points">{points.map(({ Icon, text }) => <div key={text}><Icon size={18} /><span>{text}</span></div>)}</div>
       <a href="/contact" className="text-link">Questions? Speak with us <ArrowUpRight size={15} /></a>
     </div></div></section>
 }

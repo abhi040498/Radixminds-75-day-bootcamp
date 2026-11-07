@@ -77,7 +77,6 @@ Suggested launch measures (instrumentation and targets to approve): program-page
 │   ├── /programs/class-10
 │   └── /programs/class-12
 ├── /approach
-├── /roadmap
 ├── /fees-and-offers
 ├── /enrol (program selection / registration start)
 │   ├── /enrol/class-10
@@ -95,7 +94,7 @@ Suggested launch measures (instrumentation and targets to approve): program-page
     └── /admin/settings
 ```
 
-Header navigation should stay concise: Programs, Our Approach, 75-Day Roadmap, Fees; primary CTA “Enrol Now.” Footer carries contact, policy links, location wording, and brand. Add FAQ as a section on relevant pages rather than a separate route unless content volume warrants it.
+Header navigation should stay concise: Programs and Contact; primary CTA “Enrol Now.” The preparation roadmap is presented on the homepage and individual program pages; there is no standalone `/roadmap` page. Footer carries contact, policy links, location wording, and brand.
 
 ## 6. Homepage section structure
 
@@ -144,10 +143,10 @@ Header navigation should stay concise: Programs, Our Approach, 75-Day Roadmap, F
 - Online/offline testing options stated as supplied; exact availability and logistics configurable.
 - Expectations and exclusions: program supports preparation; no score/result guarantee.
 
-### Roadmap (`/roadmap`)
+### Preparation roadmap
 
-- Visual 75-day framework organized into owner-approved phases.
-- At launch, use phase labels only after academic review; do not invent dates, class hours, or lesson sequence.
+- Present the 75-day framework within the homepage and individual program pages.
+- Use phase labels only after academic review; do not invent dates, class hours, or lesson sequence.
 - Explain how practice and mock tests build through the program.
 
 ### Fees & offers (`/fees-and-offers`)

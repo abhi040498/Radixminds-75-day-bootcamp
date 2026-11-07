@@ -1,25 +1,39 @@
-import { ArrowDown, ArrowRight, UsersRound } from 'lucide-react'
+import { ArrowRight, BookOpenCheck, CalendarDays, ClipboardCheck, Clock3, FileText, GraduationCap, Phone, RefreshCw, Rocket } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { StudyIllustration } from '../StudyIllustration'
-import { campaign } from '../../data/campaign'
+
+const heroPoints = [
+  { Icon: BookOpenCheck, first: 'Structured', second: 'Classes' },
+  { Icon: ClipboardCheck, first: 'Guided', second: 'Practice' },
+  { Icon: FileText, first: 'Mock', second: 'Tests' },
+  { Icon: RefreshCw, first: 'Revision &', second: 'Doubt Support' },
+]
 
 export function Hero() {
-  return <section className="hero" id="home">
+  return <section className="hero home-hero" id="home">
     <div className="hero-grain" />
     <div className="hero-inner page-wrap">
       <div className="hero-copy">
-        <p className="hero-kicker">“Worried about your Class 10 or 12 board exams? With us, you don’t have to face them alone.”</p>
-        <h1><span className="hero-dayline">Make Your</span><br /><span>Next 75 Days</span><br /><i>Count.</i></h1>
-        <p className="hero-subtitle">Prepare with clarity. Practise with purpose. Move towards your best performance.</p>
-        <p className="hero-description">A structured 75-day board preparation program designed to help Class 10 and Class 12 students strengthen concepts, revise strategically and practise with confidence.</p>
+        <p className="hero-location"><CalendarDays size={19} aria-hidden="true" /> RADIX MINDS | 75-DAY BOARD BOOTCAMP</p>
+        <h1 className="home-hero-title">You Don’t Have to Face Your Boards Alone.</h1>
+        <p className="hero-subtitle">Let’s Turn Your Preparation Into Confidence.</p>
+        <p className="hero-description">Whether you need to strengthen your concepts, complete your syllabus, improve your answer-writing skills or become more confident before the examination, we provide a structured preparation journey to help you move forward.</p>
+        <div className="hero-point-list" aria-label="Bootcamp features">{heroPoints.map(({ Icon, first, second }) => <span key={first}><Icon size={34} strokeWidth={2.1} /><span>{first}<br />{second}</span></span>)}</div>
         <div className="hero-actions">
-          <a className="button button-gold" href="#programs">Explore Programs <ArrowRight size={17} /></a>
-          <a className="button button-text-light" href="#roadmap">Discover the 75-Day Roadmap <ArrowDown size={16} /></a>
+          <a className="button button-gold" href="#programs">Explore Class 10 &amp; 12 Programmes <ArrowRight size={17} /></a>
+          <Link className="button button-text-light" to="/contact">Talk to Our Team <Phone size={16} /></Link>
         </div>
-        <div className="hero-tags"><span>CLASS 10</span><b>·</b><span>CLASS 12</span><b>·</b><span>75-DAY PROGRAM</span></div>
-        <div className="hero-cohort-note"><span><UsersRound size={15} /> Maximum {campaign.batchCapacity} students per cohort</span><i /><span>Ask the team about current availability</span></div>
+        <p className="hero-punchline"><Rocket size={20} aria-hidden="true" /> Your potential is there. Let’s prepare to bring it out.</p>
       </div>
-      <div className="hero-art-wrap"><StudyIllustration /></div>
+      <div className="hero-art-wrap">
+        <StudyIllustration />
+        <div className="hero-quick-facts" aria-label="Programs and guided learning">
+          <div><GraduationCap aria-hidden="true" /><strong>Class 10</strong></div>
+          <div><GraduationCap aria-hidden="true" /><strong>Class 12</strong></div>
+          <div><CalendarDays aria-hidden="true" /><strong>75</strong><span>Days</span></div>
+          <div><Clock3 aria-hidden="true" /><strong>300</strong><span>Hours</span></div>
+        </div>
+      </div>
     </div>
-    <div className="hero-bottomline"><span>RADIX MINDS</span><span>BOARD BOOTCAMP <i>—</i> BOKARO</span><a href="#about" aria-label="Scroll to learn about the bootcamp"><ArrowDown size={15} /></a></div>
   </section>
 }
