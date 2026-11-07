@@ -2,6 +2,10 @@
   command = "npm run build:netlify"
   publish = "dist"
 
+[build.environment]
+  # Netlify must install TypeScript, Vite, and the other build tools from devDependencies.
+  NPM_FLAGS = "--include=dev"
+
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"
