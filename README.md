@@ -23,7 +23,16 @@ For Hostinger’s Node.js Web App configuration, set the build command to `npm c
 
 ## Environment configuration
 
-See `.env.example` for the placeholder-only list. Set production variables using the hosting dashboard:
+See `.env.example` for the placeholder-only list. Its `YOUR_...` values are deliberately non-functional; replace them only in local ignored `.env` or the hosting dashboard. Example values:
+
+```dotenv
+SUPABASE_URL=YOUR_SUPABASE_URL
+SUPABASE_PUBLIC_KEY=YOUR_SUPABASE_PUBLIC_KEY
+SUPABASE_SECRET_KEY=YOUR_SUPABASE_SECRET_KEY
+STATUS_TOKEN_SECRET=YOUR_RANDOM_STATUS_TOKEN_SECRET
+```
+
+Set production variables using the hosting dashboard:
 
 - `NODE_ENV=production`
 - `PORT` (use the runtime-provided port if Hostinger assigns one)
