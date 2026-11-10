@@ -1,4 +1,5 @@
 .enrolment-page,.enrol-confirm-page,.legal-page,.admin-page{background:#f7f5ef;min-height:calc(100vh - 76px);padding:72px 0 92px;color:#142b49}
+.whatsapp-consent{display:flex;align-items:flex-start;gap:11px;margin-top:16px;padding:14px 16px;border:1px solid #dfe8e3;border-radius:12px;background:#f7fbf8;cursor:pointer}.whatsapp-consent input{flex:0 0 auto;width:17px;height:17px;margin:2px 0 0;accent-color:#32756a}.whatsapp-consent span{display:grid;gap:4px}.whatsapp-consent b{font-size:13px}.whatsapp-consent small{max-width:62ch;color:#61716f;font-size:12px;line-height:1.55}.admin-whatsapp-draft{display:flex;align-items:center;flex-wrap:wrap;gap:12px;margin:18px 0;padding:16px;border:1px solid #dce9e2;border-radius:12px;background:#f5faf6}.admin-whatsapp-draft>div{display:grid;gap:3px;flex:1 1 220px}.admin-whatsapp-draft small{color:#61716f;font-size:11px}.admin-whatsapp-draft button,.admin-whatsapp-draft a{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:8px 13px;border:0;border-radius:8px;background:#32756a;color:#fff;font-size:12px;font-weight:750;text-decoration:none;cursor:pointer}
 .enrolment-wrap{max-width:1140px}
 .enrolment-heading{max-width:700px;margin:0 auto 35px;text-align:center}
 .enrolment-heading h1,.legal-card h1,.admin-login h1,.admin-dashboard h1{font-family:var(--serif);font-size:clamp(40px,5vw,64px);font-weight:500;letter-spacing:-1.8px;line-height:1.04;margin:16px 0}
@@ -70,3 +71,59 @@
 @media(max-width:640px){.site-footer .footer-links{grid-template-columns:repeat(2,minmax(0,1fr));gap:25px 18px}.site-footer .footer-links>div{min-width:0}}
 .legal-approved-status{display:inline-flex;align-items:center;gap:8px;margin:0 0 25px;padding:9px 13px;border:1px solid #c9e2d5;border-radius:999px;background:#edf7f0;color:#236b50;font-size:10px;font-weight:850;letter-spacing:.08em}
 .legal-approved-status svg{flex:none}
+
+/* Single, compact policy acknowledgement on the enrolment review step. */
+.enrol-consent-list{gap:0;margin:16px 0 18px}
+.enrol-consent-panel{padding:14px 16px;border:1px solid #e3e5de;border-radius:14px;background:#f8f8f3}
+.enrol-consent-panel.has-error{border-color:#d58b7d;background:#fff9f7}
+.enrol-consent{grid-template-columns:19px minmax(0,1fr);align-items:start;gap:11px;color:#354b58;font-size:12px;line-height:1.65}
+.enrol-consent>input{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.enrol-consent-box{width:19px;height:19px;margin-top:2px;border-color:#aebbb6;border-radius:5px;background:#fff}
+.enrol-consent-panel .enrol-field-error{display:block;margin:8px 0 0 30px;font-size:11px}
+.enrol-consent a{color:#1e6965;font-weight:700;text-decoration-thickness:1px;text-underline-offset:3px}
+.enrol-consent a:focus-visible{border-radius:2px;outline:2px solid #e9a23b;outline-offset:2px}
+.enrolment-aside{min-width:0;padding:26px}
+.enrolment-aside>small{display:block;margin-top:2px;font-size:10px;line-height:1.4}
+.enrolment-aside h2{font-size:clamp(29px,2.5vw,34px);line-height:1.14;overflow-wrap:anywhere}
+.enrolment-aside ul{gap:13px}
+.enrolment-aside li{align-items:flex-start;font-size:13px;line-height:1.45}
+.enrolment-aside li svg{flex:none;margin-top:2px}
+.enrol-aside-fee{gap:9px;padding:18px}
+.enrol-aside-fee>span{font-size:9px;line-height:1.4}
+.enrol-aside-fee>strong{font-size:15px;line-height:1.4;overflow-wrap:anywhere}
+.enrol-aside-fee>small{font-size:12px;line-height:1.45}
+.enrol-aside-fee>b{font-size:27px;line-height:1.15}
+.enrolment-aside>p{align-items:flex-start;overflow-wrap:anywhere;font-size:12px;line-height:1.6}
+.enrolment-aside>p svg{flex:none;margin-top:2px}
+.enrol-refund-policy,.student-refund-request{margin:15px 0;padding:14px 16px;border:1px solid #e7dfc9;border-radius:13px;background:#fcfaf3;color:#536269;font-size:11px;line-height:1.65}
+.enrol-refund-policy>strong,.student-refund-request>strong{display:block;color:#8d6323;font-size:9px;font-weight:900;letter-spacing:1px}
+.enrol-refund-policy p,.student-refund-request>p{margin:7px 0 0}
+.student-refund-request label{display:grid;gap:6px;margin-top:13px;color:#344b58;font-size:10px;font-weight:750}
+.student-refund-request textarea{width:100%;min-height:82px;padding:10px;border:1px solid #daddd7;border-radius:9px;background:white;color:#142b49;font:inherit;font-size:11px;resize:vertical}
+.student-refund-request button,.admin-refund-controls button,.admin-refund-process{min-height:38px;margin-top:10px;padding:0 14px;border:0;border-radius:9px;background:#142b49;color:white;font-size:10px;font-weight:800;cursor:pointer}
+.student-refund-request button:disabled,.admin-refund-controls button:disabled,.admin-refund-process:disabled{opacity:.55;cursor:not-allowed}
+.student-refund-request>p[role="status"]{padding:9px;border-radius:8px;background:#edf5f1;color:#245f54}
+.student-refund-status{display:grid;gap:6px;margin-top:12px;padding:12px;border:1px solid #dce6df;border-radius:10px;background:white;color:#40575e;font-size:11px}
+.student-refund-status small{color:#71807d;font-size:10px}
+.admin-refund-list{display:grid;gap:12px;margin-top:18px}
+.admin-refund-card{padding:17px;border:1px solid #e4e5df;border-radius:15px;background:#fff}
+.admin-refund-card>header{display:flex;justify-content:space-between;gap:15px;align-items:flex-start}
+.admin-refund-card h2{margin:6px 0 2px;color:#142b49;font-size:19px}
+.admin-refund-card header p,.admin-refund-reason{margin:4px 0;color:#617278;font-size:10px;line-height:1.55}
+.admin-refund-reason{padding:11px;border-radius:9px;background:#f7f7f2;white-space:pre-wrap}
+.admin-refund-facts{display:flex;flex-wrap:wrap;gap:8px 16px;color:#647479;font-size:9px}
+.admin-refund-controls{display:grid;grid-template-columns:minmax(130px,.5fr) minmax(200px,1fr) auto auto;align-items:end;gap:9px;margin-top:13px;padding-top:13px;border-top:1px solid #eee}
+.admin-refund-controls label{display:grid;gap:5px;color:#4f646b;font-size:9px;font-weight:750}
+.admin-refund-controls input,.admin-refund-controls textarea{width:100%;min-height:37px;padding:8px;border:1px solid #dfe2dc;border-radius:8px;background:#fff;color:#142b49;font:inherit;font-size:10px}
+.admin-refund-controls textarea{resize:vertical}
+.admin-refund-controls .is-secondary{border:1px solid #dce1db;background:white;color:#304a53}
+.admin-refund-process{margin-top:13px;background:#8c6325}
+.admin-refund-exception{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:15px;border:1px solid #ead9b3;border-radius:13px;background:#fcf8ee}
+.admin-refund-exception>div{grid-column:1/-1;display:grid;gap:3px;color:#344b58;font-size:11px}.admin-refund-exception small{color:#708080;font-size:9px;line-height:1.45}
+.admin-refund-exception label{display:grid;gap:5px;color:#4f646b;font-size:9px;font-weight:750}.admin-refund-exception input{width:100%;min-height:36px;padding:8px;border:1px solid #dfe2dc;border-radius:8px;background:white;color:#142b49;font:inherit;font-size:10px}
+.admin-refund-exception button{min-height:36px;align-self:end;padding:0 12px;border:0;border-radius:8px;background:#142b49;color:white;font-size:10px;font-weight:800;cursor:pointer}.admin-refund-exception button:disabled{opacity:.55}
+.admin-refund-exception>small{grid-column:1/-1}
+@media(max-width:850px){.admin-refund-controls{grid-template-columns:1fr 1fr}.admin-refund-controls label:nth-child(2){grid-column:1/-1}}
+@media(max-width:560px){.admin-refund-card{padding:13px}.admin-refund-card>header{align-items:flex-start;flex-direction:column}.admin-refund-controls{grid-template-columns:1fr}.admin-refund-controls label:nth-child(2){grid-column:auto}.admin-refund-controls button{width:100%}.admin-refund-exception{grid-template-columns:1fr}.admin-refund-exception>div,.admin-refund-exception>small{grid-column:auto}.admin-refund-exception button{width:100%}}
+@media(max-width:900px){.enrolment-aside{display:block}.enrol-aside-icon{margin:0 0 15px}.enrolment-aside>small{margin:0}.enrolment-aside h2{margin:8px 0 17px}.enrolment-aside ul{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:0}.enrol-aside-fee{grid-template-columns:minmax(0,1fr) auto;align-items:center}.enrol-aside-fee>span,.enrol-aside-fee>strong,.enrol-aside-fee>small{grid-column:1}.enrol-aside-fee>b{grid-column:2;grid-row:1/4}}
+@media(max-width:600px){.enrol-consent-panel{padding:13px}.enrol-consent{font-size:13px;line-height:1.6}.enrol-consent-panel .enrol-field-error{margin-left:30px}.enrolment-aside{padding:20px}.enrolment-aside li{font-size:13px}.enrol-aside-fee{grid-template-columns:minmax(0,1fr);padding:15px}.enrol-aside-fee>span,.enrol-aside-fee>strong,.enrol-aside-fee>small,.enrol-aside-fee>b{grid-column:auto;grid-row:auto}.enrol-aside-fee>b{font-size:25px}.enrolment-aside>p{font-size:12px}}

@@ -4,6 +4,7 @@ server/dist/
 .env
 .env.*
 !.env.example
+!.env.test.example
 *.tsbuildinfo
 .DS_Store
 Thumbs.db

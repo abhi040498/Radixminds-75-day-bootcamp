@@ -14,23 +14,19 @@ It applies to Class 10 and Class 12 and all three learning modes:
 
 ## 2. General Refund Principles
 
-Refund requests will be reviewed fairly and in accordance with this policy and applicable law.
+Students may submit refund requests within 7 calendar days from the date of successful payment. Submission of a refund request does not guarantee approval. All requests are subject to review by RadixMinds management. The administration will determine the eligibility and approved refund amount on a case-by-case basis, subject to applicable laws and the published terms and conditions.
+
+The request window counts calendar dates in Asia/Kolkata. The payment date is calendar day 1; the request window closes at 00:00 IST after calendar day 7. Requests received at or after that cutoff are outside the standard request window. A request submitted within the window is not automatically approved.
 
 A student or their authorised representative may contact Radix Minds to request cancellation or a refund.
 
 A request will not be rejected solely because it was submitted through the wrong communication channel, provided that the student's identity and enrolment can reasonably be verified.
 
-The refund request process is:
-
-1. The customer contacts the Radix Minds team by support email or phone.
-2. The team reviews the request.
-3. The team communicates its decision directly to the customer.
-4. If the refund is approved, the team initiates it. No separate management approval or additional approval stage is required.
-5. The target processing time is 7–10 working days from approval, subject to bank and payment-provider timelines.
+RadixMinds communicates each decision directly to the customer. An approved refund is initiated by an authorized team member; no refund is initiated automatically on request submission. The target processing time is 7–10 working days from approval, subject to bank and payment-provider timelines.
 
 ## 3. Cancellation Before the Program Begins
 
-A student who requests cancellation before the scheduled program commencement date will be eligible for a full refund of the program fee actually received.
+A student may submit a refund request before the scheduled program commencement date if it is submitted within the standard seven-calendar-day request window described above. A request outside that window may be recorded only where applicable law or an authorized exception applies. Submission does not guarantee approval or a particular amount.
 
 This applies to Online, Hybrid and Offline enrolments.
 
@@ -43,15 +39,9 @@ The request should include:
 
 ## 4. Withdrawal After the Program Begins
 
-### A. Withdrawal within the first seven calendar days
+### A. Refund requests within seven calendar days of payment
 
-A student who requests withdrawal within the first seven calendar days from the program commencement date may be eligible for a prorated refund.
-
-The precise refund calculation and any applicable adjustment for the portion of the program already delivered remain subject to discussion. No calculation has been agreed.
-
-Any final calculation method will be published or communicated clearly before enrolment terms are finalised.
-
-No arbitrary or undisclosed administration deduction will be applied.
+The seven-calendar-day request window is measured from the successful payment date as described in Section 2. It is a request submission period, not a guaranteed refund. The administration reviews eligibility and determines any approved refund amount case by case, subject to applicable law.
 
 ### B. Withdrawal after the first seven calendar days
 
@@ -65,7 +55,7 @@ Nothing in this clause removes any refund or consumer rights available under app
 
 ## 5. Cancellation by Radix Minds
 
-If Radix Minds cancels a batch or is unable to deliver the advertised program and cannot offer a suitable alternative accepted by the student, the student will be eligible for a full refund of the amount paid for the undelivered program.
+If Radix Minds cancels a batch or is unable to deliver the advertised program and cannot offer a suitable alternative accepted by the student, the student may submit a refund request. The request will be reviewed and handled subject to applicable law.
 
 Radix Minds will communicate the cancellation and refund procedure to affected students.
 
@@ -73,7 +63,7 @@ Radix Minds will communicate the cancellation and refund procedure to affected s
 
 Where a material change substantially affects the advertised program, Radix Minds will inform enrolled students.
 
-Where an acceptable alternative cannot be agreed upon, the affected student may request cancellation and an appropriate refund for the undelivered portion of the service, subject to applicable law.
+Where an acceptable alternative cannot be agreed upon, the affected student may request cancellation and a refund review for the undelivered portion of the service, subject to applicable law.
 
 Minor operational changes that do not materially affect the academic program will not automatically qualify for a refund.
 
@@ -83,15 +73,15 @@ Minor operational changes that do not materially affect the academic program wil
 
 If a payment attempt fails but the student's bank account or payment instrument is debited, the transaction will be checked against the payment provider and banking records.
 
-Any amount confirmed as received by or payable to Radix Minds without a corresponding valid enrolment will be refunded or otherwise resolved appropriately.
+Any amount confirmed as received by or payable to Radix Minds without a corresponding valid enrolment will be reviewed and resolved appropriately, subject to applicable law.
 
 ### B. Duplicate payment
 
-If a student is charged more than once for the same enrolment, the duplicate amount will be refunded after verification.
+If a student is charged more than once for the same enrolment, the duplicate charge will be verified and reviewed for refund.
 
 ### C. Payment received but enrolment not confirmed
 
-If payment is successfully received but the enrolment is not confirmed due to a technical or administrative issue, Radix Minds will investigate and either complete the enrolment or process an appropriate refund.
+If payment is successfully received but the enrolment is not confirmed due to a technical or administrative issue, Radix Minds will investigate and either complete the enrolment or review an appropriate refund.
 
 ## 8. Learning Mode Changes
 

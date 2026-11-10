@@ -127,6 +127,10 @@ Any refund consequences will be handled under the Refund & Cancellation Policy a
 
 ## 12. Cancellation and Refunds
 
+**REFUND POLICY**
+
+Students may submit refund requests within 7 calendar days from the date of successful payment. Submission of a refund request does not guarantee approval. All requests are subject to review by RadixMinds management. The administration will determine the eligibility and approved refund amount on a case-by-case basis, subject to applicable laws and the published terms and conditions.
+
 Cancellation, withdrawal, duplicate payment and refund requests are governed by the separate Refund & Cancellation Policy published on our website.
 
 Nothing in these Terms is intended to remove rights available to a student or consumer under applicable law.

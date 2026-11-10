@@ -180,7 +180,7 @@ const courseFaqs: Record<'CLASS 10' | 'CLASS 12', [string, string][]> = {
     ['Do I need to finish the syllabus before joining?', 'The proposed roadmap starts with an assessment and planning phase. It is designed to help identify priorities, but the team should confirm current syllabus coverage and the finalized timetable for your batch.'],
     ['Is the chapter and marks information right for my board?', 'The subject pointers on this page refer to CBSE curriculum information. If you follow another board or session, contact the team to confirm the syllabus coverage before enrolling.'],
     ['How do I confirm the fee, offer and payment process?', 'The program fee is shown near the end of this page. The 80% offer and its validity are subject to confirmation. Contact Radix Minds to confirm the current fee, payment instructions and seat availability before paying.'],
-    ['Can we check the cancellation or refund terms first?', 'Yes. Please ask the Radix Minds team for the current cancellation and refund terms before making a payment.'],
+    ['Can we check the cancellation or refund terms first?', 'Students may submit refund requests within 7 calendar days from the date of successful payment. Submission of a refund request does not guarantee approval. All requests are subject to review by RadixMinds management. The administration will determine the eligibility and approved refund amount on a case-by-case basis, subject to applicable laws and the published terms and conditions.'],
   ],
   'CLASS 12': [
     ['How do I choose between Mathematics and Biology?', 'Physics and Chemistry are common to both options. Choose either Mathematics or Biology as the third subject pathway, matching your current Class 12 subjects. Contact the team if you need help confirming the selection.'],
@@ -196,7 +196,7 @@ const courseFaqs: Record<'CLASS 10' | 'CLASS 12', [string, string][]> = {
     ['Does the program include practical or lab preparation?', 'This page describes theory preparation, practice and mock tests. Please contact the team to confirm whether practical or lab preparation is included for your subjects and board.'],
     ['Is this syllabus information suitable for my board and session?', 'The chapter and weighting pointers shown here refer to CBSE curriculum information. If you follow another board or session, ask the team to verify the syllabus alignment before enrolling.'],
     ['How do I confirm the fee, 80% offer and payment details?', 'The program fee is shown near the end of this page. Offer validity and payment instructions should be confirmed with Radix Minds before you pay. The team can also confirm current seat availability.'],
-    ['Can I check cancellation or refund terms before paying?', 'Yes. Contact the team and review the current cancellation and refund terms before making a payment.'],
+    ['Can I check cancellation or refund terms before paying?', 'Students may submit refund requests within 7 calendar days from the date of successful payment. Submission of a refund request does not guarantee approval. All requests are subject to review by RadixMinds management. The administration will determine the eligibility and approved refund amount on a case-by-case basis, subject to applicable laws and the published terms and conditions.'],
   ],
 }
 
