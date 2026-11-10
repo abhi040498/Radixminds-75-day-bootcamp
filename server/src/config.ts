@@ -4,6 +4,10 @@ import { z } from 'zod'
 const optional = z.string().trim().optional().transform(value => value || undefined)
 const statusSecret = optional.refine(value => !value || value.length >= 32, 'STATUS_TOKEN_SECRET must have at least 32 characters.')
 const webhookSecretMinimumLength = 24
+const razorpayMode = z.preprocess(
+  value => typeof value === 'string' ? value.trim() || undefined : value,
+  z.enum(['test', 'live']).default('test'),
+)
 
 export function isWebhookSecretReady(value: string | undefined) {
   return Boolean(value && value.trim().length >= webhookSecretMinimumLength)
@@ -32,7 +36,7 @@ const envSchema = z.object({
   // An invalid optional webhook setting must not prevent unrelated API routes
   // from starting. Payment readiness and the webhook route fail closed below.
   RAZORPAY_WEBHOOK_SECRET: optional,
-  RAZORPAY_MODE: z.enum(['test', 'live']).default('test'),
+  RAZORPAY_MODE: razorpayMode,
   STATUS_TOKEN_SECRET: statusSecret,
   POLICIES_APPROVED: z.enum(['true', 'false']).default('false'),
   PAYMENT_ENABLED: z.enum(['true', 'false']).default('false'),
