@@ -1,12 +1,34 @@
-export const APPROVED_TEST_PROJECT_URL = 'https://oohcwibhjmzrrpuxonck.supabase.co'
+const productionSupabaseProjectRef = 'orkuiauxjlfexmntndim'
 
-export function isApprovedTestProjectUrl(value) {
-  return value === APPROVED_TEST_PROJECT_URL
+function isCanonicalSupabaseProjectUrl(value) {
+  if (typeof value !== 'string' || !value) return false
+  try {
+    const url = new URL(value)
+    return url.protocol === 'https:'
+      && /^[a-z0-9-]+\.supabase\.co$/i.test(url.hostname)
+      && url.hostname.split('.')[0] !== productionSupabaseProjectRef
+      && !url.username
+      && !url.password
+      && !url.port
+      && url.pathname === '/'
+      && !url.search
+      && !url.hash
+      && value === url.origin
+  } catch {
+    return false
+  }
+}
+
+export function isApprovedTestProjectUrl(value, expectedTestUrl) {
+  return isCanonicalSupabaseProjectUrl(expectedTestUrl)
+    && isCanonicalSupabaseProjectUrl(value)
+    && value === expectedTestUrl
 }
 
 export function validateTestApiEnvironment(testEnv) {
-  if (!isApprovedTestProjectUrl(testEnv.SUPABASE_URL)) {
-    throw new Error('Test API not started: Supabase URL does not match the exact approved isolated test project URL.')
+  const expectedTestUrl = testEnv.RADIXMINDS_TEST_SUPABASE_URL
+  if (!isApprovedTestProjectUrl(testEnv.SUPABASE_URL, expectedTestUrl)) {
+    throw new Error('Test API not started: SUPABASE_URL must exactly match the canonical HTTPS RADIXMINDS_TEST_SUPABASE_URL from .env.test.local.')
   }
 
   if (!testEnv.SUPABASE_PUBLIC_KEY || !testEnv.SUPABASE_SECRET_KEY ||

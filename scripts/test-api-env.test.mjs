@@ -7,14 +7,15 @@ import { join, resolve } from 'node:path'
 import test from 'node:test'
 import { pathToFileURL } from 'node:url'
 import {
-  APPROVED_TEST_PROJECT_URL,
   createIsolatedTestChildEnv,
   isApprovedTestProjectUrl,
   validateTestApiEnvironment,
 } from './test-api-env.mjs'
 
+const syntheticTestUrl = 'https://example-test-project.supabase.co'
 const validEnv = {
-  SUPABASE_URL: APPROVED_TEST_PROJECT_URL,
+  SUPABASE_URL: syntheticTestUrl,
+  RADIXMINDS_TEST_SUPABASE_URL: syntheticTestUrl,
   SUPABASE_PUBLIC_KEY: 'test-public-key-fixture',
   SUPABASE_SECRET_KEY: 'test-secret-key-fixture',
   STATUS_TOKEN_SECRET: 'test-only-random-status-token-secret-fixture',
@@ -28,25 +29,34 @@ const validEnv = {
 const require = createRequire(import.meta.url)
 
 test('accepts only the exact approved HTTPS test URL', () => {
-  assert.equal(isApprovedTestProjectUrl(APPROVED_TEST_PROJECT_URL), true)
+  assert.equal(isApprovedTestProjectUrl(syntheticTestUrl, syntheticTestUrl), true)
   assert.doesNotThrow(() => validateTestApiEnvironment(validEnv))
 })
 
 for (const [label, url] of [
   ['production URL', 'https://orkuiauxjlfexmntndim.supabase.co'],
-  ['HTTP URL', 'http://oohcwibhjmzrrpuxonck.supabase.co'],
+  ['HTTP URL', 'http://example-test-project.supabase.co'],
   ['wrong hostname', 'https://other-project.supabase.co'],
-  ['embedded credentials', 'https://user:password@oohcwibhjmzrrpuxonck.supabase.co'],
-  ['unexpected port', 'https://oohcwibhjmzrrpuxonck.supabase.co:8443'],
-  ['URL path', 'https://oohcwibhjmzrrpuxonck.supabase.co/rest/v1'],
-  ['query string', 'https://oohcwibhjmzrrpuxonck.supabase.co?apikey=fixture'],
-  ['fragment', 'https://oohcwibhjmzrrpuxonck.supabase.co#fragment'],
+  ['embedded credentials', 'https://user:password@example-test-project.supabase.co'],
+  ['unexpected port', 'https://example-test-project.supabase.co:8443'],
+  ['explicit default port', 'https://example-test-project.supabase.co:443'],
+  ['URL path', 'https://example-test-project.supabase.co/rest/v1'],
+  ['query string', 'https://example-test-project.supabase.co?apikey=fixture'],
+  ['fragment', 'https://example-test-project.supabase.co#fragment'],
 ]) {
   test(`rejects ${label}`, () => {
-    assert.equal(isApprovedTestProjectUrl(url), false)
+    assert.equal(isApprovedTestProjectUrl(url, syntheticTestUrl), false)
     assert.throws(() => validateTestApiEnvironment({ ...validEnv, SUPABASE_URL: url }))
   })
 }
+
+test('rejects a missing, malformed, or mismatched runtime test URL', () => {
+  assert.equal(isApprovedTestProjectUrl(syntheticTestUrl, undefined), false)
+  assert.equal(isApprovedTestProjectUrl(syntheticTestUrl, 'not a URL'), false)
+  assert.equal(isApprovedTestProjectUrl('https://another-project.supabase.co', syntheticTestUrl), false)
+  assert.equal(isApprovedTestProjectUrl('https://orkuiauxjlfexmntndim.supabase.co', 'https://orkuiauxjlfexmntndim.supabase.co'), false)
+  assert.throws(() => validateTestApiEnvironment({ ...validEnv, RADIXMINDS_TEST_SUPABASE_URL: '' }))
+})
 
 test('forces both gates off and removes inherited production credentials', () => {
   const parentEnv = {
@@ -67,7 +77,7 @@ test('forces both gates off and removes inherited production credentials', () =>
   }
   const child = createIsolatedTestChildEnv(validEnv, resolve('.env.test.local'), parentEnv)
 
-  assert.equal(child.SUPABASE_URL, APPROVED_TEST_PROJECT_URL)
+  assert.equal(child.SUPABASE_URL, syntheticTestUrl)
   assert.equal(child.SUPABASE_PUBLIC_KEY, validEnv.SUPABASE_PUBLIC_KEY)
   assert.equal(child.SUPABASE_SECRET_KEY, validEnv.SUPABASE_SECRET_KEY)
   assert.equal(child.SUPABASE_SERVICE_ROLE_KEY, '')

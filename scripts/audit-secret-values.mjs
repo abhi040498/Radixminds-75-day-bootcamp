@@ -18,7 +18,8 @@ function add(name, value, source) {
 
 // Include values already supplied to this process, then local ignored env files.
 for (const [name, value] of Object.entries(process.env)) add(name, value, 'process environment')
-const localEnvFiles = existsSync(root) ? readdirSync(root).filter(name => /^\.env(?:\.|$)/.test(name) && name !== '.env.example') : []
+const localEnvFiles = existsSync(root) ? readdirSync(root).filter(name =>
+  /^\.env(?:\.|$)/.test(name) && name !== '.env.example' && !name.endsWith('.example')) : []
 for (const filename of localEnvFiles) {
   const envPath = path.join(root, filename)
   if (!existsSync(envPath)) continue

@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parse } from 'dotenv'
-import { APPROVED_TEST_PROJECT_URL, createIsolatedTestChildEnv, validateTestApiEnvironment } from './test-api-env.mjs'
+import { createIsolatedTestChildEnv, validateTestApiEnvironment } from './test-api-env.mjs'
 
 const testEnvPath = resolve(process.cwd(), '.env.test.local')
 
@@ -29,7 +29,7 @@ function startTestApi() {
   }
 
   const childEnv = createIsolatedTestChildEnv(testEnv, testEnvPath)
-  console.log(`Starting API with isolated Supabase test project ${new URL(APPROVED_TEST_PROJECT_URL).hostname.split('.')[0]}; payment and enrolment gates remain closed.`)
+  console.log(`Starting API with isolated Supabase test project ${new URL(testEnv.SUPABASE_URL).hostname.split('.')[0]}; payment and enrolment gates remain closed.`)
   const child = spawn(process.execPath, ['server/dist/start.js'], { cwd: process.cwd(), env: childEnv, stdio: 'inherit' })
   child.on('error', () => {
     console.error('Test API process could not start. Run npm run build:api first.')
