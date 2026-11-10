@@ -6,7 +6,6 @@ export type WhatsAppConfirmationInput = {
   subjects: string[]
   amountPaise: number
   paymentReference: string
-  startDate: string
   supportPhone: string
 }
 
@@ -56,8 +55,7 @@ export function buildWhatsAppConfirmationDraft(input: WhatsAppConfirmationInput)
     `Admission reference: ${input.admissionReference}`,
     `Subjects: ${input.subjects.join(', ') || 'As shown in your admission details'}`,
     `Payment received: ${amount} (reference ${input.paymentReference})`,
-    `Programme start date: ${input.startDate}`,
-    'Your class schedule and joining instructions will be shared before the programme begins.',
+    'Your programme schedule and joining instructions will be shared before the programme begins.',
     '',
     `For support, contact Radix Minds at +${supportNumber}.`,
   ]

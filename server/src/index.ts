@@ -5,7 +5,7 @@ import helmet from 'helmet'
 import rateLimit from 'express-rate-limit'
 import Razorpay from 'razorpay'
 import { z } from 'zod'
-import { config, boardOptions, languageOptions, hasAdminAuth, hasDatabase, hasRazorpay, checkoutBaseReady } from './config.js'
+import { config, boardOptions, languageOptions, hasAdminAuth, hasDatabase, hasRazorpay, hasValidRazorpayWebhookSecret, checkoutBaseReady } from './config.js'
 import { getAuthClient, getDatabase } from './supabase.js'
 import { createStatusToken, csrfOriginGuard, newPublicReference, safeHexEqual, sha256, verifyHmac, validateRazorpayKeyMode } from './security.js'
 import { createRazorpayWebhookHandler } from './razorpayWebhook.js'
@@ -105,9 +105,9 @@ async function markFailedPayment(db: ReturnType<typeof getDatabase>, paymentId: 
   const { error } = await db.rpc('mark_provider_payment_failed', { p_provider_payment_id: paymentId })
   if (error) throw error
 }
-const handleRazorpayWebhook = createRazorpayWebhookHandler(config.RAZORPAY_WEBHOOK_SECRET, razorpayWebhookStore)
+const handleRazorpayWebhook = createRazorpayWebhookHandler(hasValidRazorpayWebhookSecret ? config.RAZORPAY_WEBHOOK_SECRET : undefined, razorpayWebhookStore)
 app.post('/api/v1/webhooks/razorpay', razorpayWebhook, async (req, res) => {
-  if (!hasDatabase) return res.status(503).json({ error: 'Webhook processing is not available.' })
+  if (!hasDatabase || !hasValidRazorpayWebhookSecret) return res.status(503).json({ error: 'Webhook processing is not available.' })
   const result = await handleRazorpayWebhook({
     rawBody: req.body,
     signature: req.get('x-razorpay-signature'),
@@ -554,7 +554,7 @@ app.post('/api/v1/admin/enrolments/:id/whatsapp-draft', requireAdmin, csrfOrigin
   }))
   if (!student || !payment || !paymentIsEligible) return fail(res,409,'PAYMENT_NOT_VERIFIED','A captured payment matching this admission is required before preparing a confirmation.')
   try {
-    const draft = buildWhatsAppConfirmationDraft({ studentName:student.full_name, studentMobile:enrolment.whatsapp_mobile_e164 ?? student.mobile_e164, admissionReference:enrolment.public_reference, programName:(enrolment.program_snapshot as {name?:string} | null)?.name ?? '75-Day Board Bootcamp', subjects:Array.isArray(enrolment.subjects_snapshot) ? enrolment.subjects_snapshot.map(String) : [], amountPaise:Number(payment.amount_paise), paymentReference:payment.provider_payment_id, startDate:'30 November 2026', supportPhone:config.WHATSAPP_PHONE })
+    const draft = buildWhatsAppConfirmationDraft({ studentName:student.full_name, studentMobile:enrolment.whatsapp_mobile_e164 ?? student.mobile_e164, admissionReference:enrolment.public_reference, programName:(enrolment.program_snapshot as {name?:string} | null)?.name ?? '75-Day Board Bootcamp', subjects:Array.isArray(enrolment.subjects_snapshot) ? enrolment.subjects_snapshot.map(String) : [], amountPaise:Number(payment.amount_paise), paymentReference:payment.provider_payment_id, supportPhone:config.WHATSAPP_PHONE })
     return res.json({ ready:true, sent:false, notice:'Draft prepared. Review and send it manually in WhatsApp.', ...draft })
   } catch {
     return fail(res,422,'WHATSAPP_DRAFT_INVALID','The saved student contact number is not valid for WhatsApp.')

@@ -18,7 +18,7 @@ test('draft contains confirmed admission and payment details and is a manual wa.
   const result = buildWhatsAppConfirmationDraft({
     studentName: 'Aarav Kumar', studentMobile: '+919876543210', admissionReference: 'RM-TEST-01',
     programName: 'Class 10 Board Bootcamp', subjects: ['Mathematics', 'Science'], amountPaise: 249900,
-    paymentReference: 'pay_test_verified_01', startDate: '30 November 2026', supportPhone: '919304829718',
+    paymentReference: 'pay_test_verified_01', supportPhone: '919304829718',
   })
   assert.match(result.url, /^https:\/\/wa\.me\/919876543210\?text=/)
   const message = decodeURIComponent(result.url.split('?text=')[1]!)
@@ -27,13 +27,14 @@ test('draft contains confirmed admission and payment details and is a manual wa.
   assert.match(message, /Mathematics, Science/)
   assert.match(message, /₹2,499/)
   assert.match(message, /pay_test_verified_01/)
-  assert.match(message, /schedule and joining instructions will be shared before the programme begins/)
+  assert.match(message, /programme schedule and joining instructions will be shared before the programme begins/)
+  assert.doesNotMatch(message, /30 November 2026/)
   assert.match(message, /\+919304829718/)
   assert.equal(result.message, message)
 })
 
 test('rejects invalid student/support phone numbers and invalid payment amounts', () => {
-  const base = { studentName:'Test Student', studentMobile:'+919876543210', admissionReference:'RM-TEST-02', programName:'Class 12', subjects:['Physics'], amountPaise:349900, paymentReference:'pay_test_02', startDate:'30 November 2026', supportPhone:'919304829718' }
+  const base = { studentName:'Test Student', studentMobile:'+919876543210', admissionReference:'RM-TEST-02', programName:'Class 12', subjects:['Physics'], amountPaise:349900, paymentReference:'pay_test_02', supportPhone:'919304829718' }
   assert.throws(() => buildWhatsAppConfirmationDraft({ ...base, studentMobile:'12345' }), /INVALID_WHATSAPP_NUMBER/)
   assert.throws(() => buildWhatsAppConfirmationDraft({ ...base, supportPhone:'12345' }), /INVALID_WHATSAPP_NUMBER/)
   assert.throws(() => buildWhatsAppConfirmationDraft({ ...base, amountPaise:-1 }), /INVALID_PAYMENT_AMOUNT/)
