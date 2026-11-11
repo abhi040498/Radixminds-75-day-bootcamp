@@ -2,7 +2,8 @@ import express, { type ErrorRequestHandler } from 'express'
 import { randomUUID } from 'node:crypto'
 import cors from 'cors'
 import helmet from 'helmet'
-import rateLimit from 'express-rate-limit'
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit'
+import { isIP } from 'node:net'
 import Razorpay from 'razorpay'
 import { z } from 'zod'
 import { config, boardOptions, languageOptions, hasAdminAuth, hasDatabase, hasRazorpay, hasValidRazorpayWebhookSecret, checkoutBaseReady } from './config.js'
@@ -21,6 +22,9 @@ import { enrolmentSessionCookieName, isSameOriginCookieRequest, readCookieValue 
 
 const app = express()
 app.disable('x-powered-by')
+// The Netlify adapter supplies Netlify's canonical client IP as the socket
+// address. Do not trust X-Forwarded-For: callers can supply that header.
+app.set('trust proxy', false)
 app.use(helmet({ crossOriginEmbedderPolicy: false }))
 app.use((_req, res, next) => {
   // Use a server-generated correlation ID; never echo potentially identifying
@@ -53,9 +57,17 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Idempotency-Key'],
 }))
 
-const publicLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 30, standardHeaders: 'draft-8', legacyHeaders: false })
-const checkoutLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 8, standardHeaders: 'draft-8', legacyHeaders: false })
-const adminLoginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 8, standardHeaders: 'draft-8', legacyHeaders: false })
+function rateLimitClientKey(req: express.Request) {
+  // serverless-http maps the trusted Netlify event source IP to the request
+  // socket. If Netlify omits it, use one shared fail-closed bucket instead of
+  // allowing an attacker to evade limits or passing undefined to net.isIP().
+  const clientIp = req.socket.remoteAddress
+  return clientIp && isIP(clientIp) ? ipKeyGenerator(clientIp) : 'netlify-client-ip-unavailable'
+}
+const limiterOptions = { windowMs: 15 * 60 * 1000, standardHeaders: 'draft-8' as const, legacyHeaders: false, keyGenerator: rateLimitClientKey }
+const publicLimiter = rateLimit({ ...limiterOptions, limit: 30 })
+const checkoutLimiter = rateLimit({ ...limiterOptions, limit: 8 })
+const adminLoginLimiter = rateLimit({ ...limiterOptions, limit: 8 })
 type ApiErrorCode = 'CONFIGURATION_REQUIRED' | 'VALIDATION_ERROR' | 'NOT_FOUND' | 'PAYMENT_PENDING' | 'PAYMENT_FAILED' | 'PAYMENT_MISMATCH' | 'ALREADY_CONFIRMED'
 function fail(res: express.Response, status: number, code: ApiErrorCode | string, message: string, fields?: Record<string, string>) {
   return res.status(status).json({ error: { code, message, requestId: res.locals.requestId, ...(fields ? { fields } : {}) } })
