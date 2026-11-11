@@ -25,15 +25,39 @@ import { clearEnrolmentDraftCookie, createEnrolmentDraftRouter, draftTokenFromRe
 const app = express()
 app.disable('x-powered-by')
 app.use(helmet({ crossOriginEmbedderPolicy: false }))
-app.use(cors({ origin: config.APP_ORIGIN, credentials: true, methods: ['GET', 'POST', 'PATCH', 'OPTIONS'], allowedHeaders: ['Content-Type', 'Idempotency-Key'] }))
 app.use((_req, res, next) => {
   // Use a server-generated correlation ID; never echo potentially identifying
   // client-supplied text into logs or error responses.
   const requestId = randomUUID()
+  const startedAt = Date.now()
   res.setHeader('x-request-id', requestId)
   res.locals.requestId = requestId
+  res.once('finish', () => {
+    const origin = _req.get('origin')
+    const path = _req.path
+    const route = path === '/api/health' || path === '/api/v1/config' || path === '/api/v1/programs' || path === '/api/v1/webhooks/razorpay' || path === '/api/v1/payments/verify'
+      ? path
+      : path === '/api/v1/enrolment-draft' ? 'enrolment-draft'
+        : path === '/api/v1/enrolment-draft/session' ? 'enrolment-draft-session'
+          : path.startsWith('/api/v1/enrolments/') ? 'enrolment'
+            : 'other'
+    console.info('api_request', {
+      requestId,
+      route,
+      method: _req.method,
+      originMatches: origin === undefined ? null : origin === config.APP_ORIGIN,
+      httpStatus: res.statusCode,
+      durationMs: Math.max(0, Date.now() - startedAt),
+    })
+  })
   next()
 })
+app.use(cors({
+  origin: (origin, callback) => callback(null, origin === config.APP_ORIGIN ? config.APP_ORIGIN : false),
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Idempotency-Key'],
+}))
 
 const publicLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 30, standardHeaders: 'draft-8', legacyHeaders: false })
 const checkoutLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 8, standardHeaders: 'draft-8', legacyHeaders: false })

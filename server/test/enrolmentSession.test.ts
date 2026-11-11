@@ -18,6 +18,7 @@ test('state-reconciling status GETs require same-origin Origin or Fetch Metadata
   const appOrigin = 'https://deploy-preview-1--example.netlify.app'
   assert.equal(isSameOriginCookieRequest(appOrigin, 'same-origin', appOrigin), true)
   assert.equal(isSameOriginCookieRequest(undefined, 'same-origin', appOrigin), true)
+  assert.equal(isSameOriginCookieRequest(`${appOrigin}/`, 'same-origin', appOrigin), false)
   assert.equal(isSameOriginCookieRequest('https://attacker.invalid', 'cross-site', appOrigin), false)
   assert.equal(isSameOriginCookieRequest('https://sibling.example.netlify.app', 'same-site', appOrigin), false)
   assert.equal(isSameOriginCookieRequest(undefined, undefined, appOrigin), false)

@@ -23,13 +23,14 @@ if (bundleSource.includes('staticFrontend') || bundleSource.includes('frontendBu
 }
 
 const { handler } = require(fileURLToPath(bundlePath))
-function eventFor(path, method = 'GET', body = null) {
+function eventFor(path, method = 'GET', body = null, extraHeaders = {}) {
   return {
     httpMethod: method,
     path,
     headers: {
       host: 'localhost',
-      ...(method !== 'GET' ? { origin: process.env.APP_ORIGIN || 'http://localhost:5173', 'content-type': 'application/json' } : {}),
+      ...(method !== 'GET' ? { origin: process.env.APP_ORIGIN || 'http://localhost:5173', 'content-type': 'application/json', 'sec-fetch-site': 'same-origin' } : {}),
+      ...extraHeaders,
     },
     requestContext: { identity: { sourceIp: '127.0.0.1' } },
     queryStringParameters: null,
@@ -38,12 +39,12 @@ function eventFor(path, method = 'GET', body = null) {
   }
 }
 
-async function request(path, method = 'GET', body = null) {
-  const response = await handler(eventFor(path, method, body), {})
+async function request(path, method = 'GET', body = null, headers = {}) {
+  const response = await handler(eventFor(path, method, body, headers), {})
   if (!response || typeof response.statusCode !== 'number') throw new Error(`${path}: function returned no HTTP status`)
   let payload = {}
   try { payload = JSON.parse(response.body ?? '{}') } catch { /* Status validation below is sufficient. */ }
-  return { status: response.statusCode, payload }
+  return { status: response.statusCode, payload, headers: response.headers }
 }
 
 const health = await request('/api/health')
@@ -59,6 +60,28 @@ if (config.status !== 200) throw new Error(`/api/v1/config returned ${config.sta
 if (config.payload.policiesApproved !== false) throw new Error('/api/v1/config reports that policies are approved; expected the production gate to remain false')
 if (config.payload.paymentMode !== 'test') throw new Error('/api/v1/config does not report Test Mode')
 console.log(`/api/v1/config: ${config.status}`)
+
+const preflight = await request('/api/v1/enrolment-draft', 'OPTIONS', null, {
+  'access-control-request-method': 'PUT',
+  'access-control-request-headers': 'content-type',
+})
+const responseHeader = (headers, name) => Object.entries(headers ?? {}).find(([key]) => key.toLowerCase() === name.toLowerCase())?.[1]
+if (preflight.status !== 204
+  || responseHeader(preflight.headers, 'access-control-allow-origin') !== process.env.APP_ORIGIN
+  || responseHeader(preflight.headers, 'access-control-allow-credentials') !== 'true'
+  || !String(responseHeader(preflight.headers, 'access-control-allow-methods') ?? '').split(',').map(value => value.trim()).includes('PUT')) {
+  throw new Error('Netlify Function CORS preflight did not allow the exact configured origin and credentialed PUT request.')
+}
+console.log('/api/v1/enrolment-draft OPTIONS: 204; exact-origin credentialed PUT preflight passed')
+const rejectedPreflight = await request('/api/v1/enrolment-draft', 'OPTIONS', null, {
+  origin: 'https://attacker.example.invalid',
+  'access-control-request-method': 'PUT',
+  'access-control-request-headers': 'content-type',
+})
+if (responseHeader(rejectedPreflight.headers, 'access-control-allow-origin')) {
+  throw new Error('Netlify Function CORS preflight reflected an unapproved origin.')
+}
+console.log('/api/v1/enrolment-draft OPTIONS: unapproved origin received no CORS permission')
 
 const orderGate = await request('/api/v1/enrolments/RM-AAAAAAAAAAAAAAAAAAAA/payment-orders', 'POST', '{}')
 const orderGateCode = typeof orderGate.payload?.error?.code === 'string' ? orderGate.payload.error.code : 'none'

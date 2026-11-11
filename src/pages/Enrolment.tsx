@@ -332,9 +332,21 @@ export function EnrolmentPage() {
     setErrors(next)
     return Object.keys(next).length === 0
   }
-  const nextStep = () => {
+  const nextStep = async () => {
     if (step === 0 && !form.programCode) { setErrors({ programCode: 'Choose a program to continue.' }); return }
     if (!validate()) return
+    if (step === 1) {
+      setBusy(true)
+      setMessage('')
+      try {
+        await flushDraftSave()
+      } catch {
+        setMessage('Your details are still on this page but could not be saved. Retry saving before continuing.')
+        setBusy(false)
+        return
+      }
+      setBusy(false)
+    }
     const next = Math.min(2, step + 1) as 0 | 1 | 2
     setErrors({}); setMessage(''); updateFlowStep(next)
   }

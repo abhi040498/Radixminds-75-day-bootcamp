@@ -45,6 +45,30 @@ function inspectConfiguration(webhookSecret, functionRuntime = false, razorpayMo
   }
 }
 
+function inspectAppOrigin(appOrigin) {
+  const directory = mkdtempSync(join(os.tmpdir(), 'radixminds-origin-test-'))
+  try {
+    const source = `import { config } from ${JSON.stringify(configUrl)}; console.log(JSON.stringify({ appOrigin: config.APP_ORIGIN }))`
+    const result = spawnSync(process.execPath, ['--import', 'tsx', '--input-type=module', '-e', source], {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+      env: { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot, TEMP: process.env.TEMP, TMP: process.env.TMP, DOTENV_CONFIG_PATH: join(directory, 'does-not-exist'), NODE_ENV: 'test', APP_ORIGIN: appOrigin },
+    })
+    const output = result.stdout.trim().split(/\r?\n/).at(-1)
+    return { status: result.status, appOrigin: result.status === 0 ? JSON.parse(output).appOrigin : null }
+  } finally {
+    rmSync(directory, { recursive: true, force: true })
+  }
+}
+
+test('APP_ORIGIN canonicalizes a trailing slash and rejects paths, query strings and fragments', () => {
+  const preview = 'https://deploy-preview-1--radixminds75daysbootcamp.netlify.app'
+  assert.deepEqual(inspectAppOrigin(`${preview}/`), { status: 0, appOrigin: preview })
+  for (const invalid of [`${preview}/api`, `${preview}/?x=1`, `${preview}/#section`, 'https://user:pass@example.invalid']) {
+    assert.notEqual(inspectAppOrigin(invalid).status, 0, 'APP_ORIGIN must be an origin, not a URL path or credentialed URL')
+  }
+})
+
 test('missing, empty, whitespace-only and short webhook secrets keep checkout closed', () => {
   for (const [label, secret] of [
     ['missing', undefined],
