@@ -1,7 +1,8 @@
 export type PaymentOutcome = 'confirmed' | 'pending' | 'failed' | 'needs_review'
 export type CheckoutEvent = 'handler' | 'payment.failed' | 'dismissed'
 
-type StatusResult = { status: PaymentOutcome }
+export type PaymentAttemptSnapshot = { reference: string | null; status: string }
+export type CheckoutStatusResult = { status: PaymentOutcome; payment?: PaymentAttemptSnapshot | null }
 
 /**
  * Checkout callbacks are hints only. A handler result is accepted only after
@@ -10,18 +11,19 @@ type StatusResult = { status: PaymentOutcome }
  */
 export async function resolveCheckoutOutcome(
   event: CheckoutEvent,
-  verify: () => Promise<StatusResult>,
-  refreshStatus: () => Promise<StatusResult>,
-): Promise<PaymentOutcome> {
+  verify: () => Promise<CheckoutStatusResult>,
+  refreshStatus: () => Promise<CheckoutStatusResult>,
+): Promise<CheckoutStatusResult> {
   if (event === 'handler') {
     const verification = await verify()
     if (verification.status === 'confirmed' || verification.status === 'failed' || verification.status === 'needs_review') {
-      return verification.status
+      return verification
     }
   }
-  return (await refreshStatus()).status
+  return refreshStatus()
 }
 
-export function canStartPayment(status: PaymentOutcome, hasPaymentAttempt: boolean) {
-  return status === 'failed' || (status === 'pending' && !hasPaymentAttempt)
+export function canStartPayment(status: PaymentOutcome, payment: PaymentAttemptSnapshot | null | undefined) {
+  return status === 'failed'
+    || (status === 'pending' && (!payment || (payment.status === 'created' && payment.reference === null)))
 }

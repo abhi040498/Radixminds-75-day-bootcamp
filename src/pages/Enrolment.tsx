@@ -5,7 +5,7 @@ import { bootcampDates, deliveryOptions, type LearningMode, type ProgramCode } f
 import { api, formatINR, type ApiError, type PublicProgram } from '../lib/enrolmentApi'
 import { visibleEnrolmentReference } from '../lib/enrolmentConfirmation'
 import { isEnrolmentReference, loadEnrolmentRecovery, restoreEnrolmentStep, saveEnrolmentRecovery, type StorageLike } from '../lib/enrolmentRecovery'
-import { canStartPayment, resolveCheckoutOutcome, type CheckoutEvent, type PaymentOutcome } from '../lib/paymentCheckoutRecovery'
+import { canStartPayment, resolveCheckoutOutcome, type CheckoutEvent, type CheckoutStatusResult, type PaymentOutcome, type PaymentAttemptSnapshot } from '../lib/paymentCheckoutRecovery'
 import { useProgramCatalog } from '../lib/useProgramCatalog'
 import { policyVersions } from '../data/policyVersions'
 type FormState = {
@@ -113,7 +113,7 @@ export function EnrolmentPage() {
   const submissionInFlight = useRef(false)
   const [message, setMessage] = useState('')
   const [paymentOutcome, setPaymentOutcome] = useState<PaymentOutcome>('pending')
-  const [paymentAttemptExists, setPaymentAttemptExists] = useState(false)
+  const [paymentAttempt, setPaymentAttempt] = useState<PaymentAttemptSnapshot | null>(null)
   const [savedSession, setSavedSession] = useState<EnrolmentSession | null>(() => initialRecovery.recovery.enrolmentReference && initialRecovery.recovery.programCode ? { reference: initialRecovery.recovery.enrolmentReference, programCode: initialRecovery.recovery.programCode } : null)
   const [resumeSubmittedEnrollment] = useState(Boolean(initialRecovery.recovery.enrolmentReference))
 
@@ -172,35 +172,35 @@ export function EnrolmentPage() {
   }
   const previousStep = () => { const next = Math.max(0, step - 1) as 0 | 1 | 2; setErrors({}); setMessage(''); setStep(next); setRecovery(current => ({ ...current, step: next })) }
 
-  const applyPaymentOutcome = (outcome: PaymentOutcome) => {
-    setPaymentOutcome(outcome)
-    if (outcome === 'confirmed') {
+  const applyPaymentOutcome = (result: CheckoutStatusResult) => {
+    setPaymentOutcome(result.status)
+    if (result.status === 'confirmed') {
       navigate('/enrol/confirmation')
       return
     }
-    if (outcome === 'failed') {
-      setPaymentAttemptExists(false)
+    if (result.status === 'failed') {
+      setPaymentAttempt(null)
       setRecovery(current => { const next = { ...current, paymentIdempotencyKey: makeIdempotencyKey() }; saveEnrolmentRecovery(browserStorage('localStorage'), next); return next })
       setMessage('The server verified that this payment failed. Your enrolment remains pending, and you can retry secure payment.')
       return
     }
-    setPaymentAttemptExists(true)
-    setMessage(outcome === 'needs_review'
+    setPaymentAttempt(result.payment ?? null)
+    setMessage(result.status === 'needs_review'
       ? 'Payment needs a manual check. Your enrolment is not confirmed. Please contact Radix Minds before trying again.'
       : 'Payment status is still pending verification. Your enrolment is not confirmed. Check the status before making another attempt.')
   }
 
-  const reconcileCheckout = async (session: EnrolmentSession, event: CheckoutEvent, verify?: () => Promise<{ status: PaymentOutcome }>) => {
+  const reconcileCheckout = async (session: EnrolmentSession, event: CheckoutEvent, verify?: () => Promise<CheckoutStatusResult>) => {
     try {
-      const outcome = await resolveCheckoutOutcome(
+      const result = await resolveCheckoutOutcome(
         event,
         verify ?? (async () => ({ status: 'pending' as const })),
-        () => api<{ status: PaymentOutcome }>(`/enrolments/${session.reference}/status`),
+        () => api<{ status: PaymentOutcome; payment: PaymentAttemptSnapshot | null }>(`/enrolments/${session.reference}/status`),
       )
-      applyPaymentOutcome(outcome)
+      applyPaymentOutcome(result)
     } catch (error) {
       setPaymentOutcome('pending')
-      setPaymentAttemptExists(true)
+      setPaymentAttempt({ status: 'verification_unavailable', reference: null })
       setMessage(error instanceof Error ? error.message : 'We could not verify payment status. Check again before retrying.')
     } finally {
       setBusy(false)
@@ -217,7 +217,7 @@ export function EnrolmentPage() {
     setBusy(true); setMessage('')
     try {
       const order = await api<CheckoutOrder>(`/enrolments/${session.reference}/payment-orders`, { method: 'POST', headers: { 'Idempotency-Key': recovery.paymentIdempotencyKey }, body: '{}' })
-      setPaymentAttemptExists(true)
+      setPaymentAttempt({ status: 'created', reference: null })
       setPaymentOutcome('pending')
       await loadRazorpayCheckout()
       const RazorpayConstructor = (window as WindowWithRazorpay).Razorpay
@@ -235,7 +235,7 @@ export function EnrolmentPage() {
       checkout.on('payment.failed', () => { void reconcileCheckout(session, 'payment.failed') })
       checkout.open()
     } catch (error) {
-      setPaymentAttemptExists(false)
+      setPaymentAttempt(null)
       setPaymentOutcome('pending')
       setBusy(false)
       setMessage(`${retry ? 'Checkout could not be retried. ' : ''}${error instanceof Error ? error.message : 'Please try again.'}`)
@@ -296,7 +296,7 @@ export function EnrolmentPage() {
 
         {step === 2 && <div className="enrolment-step-content"><div className="enrolment-step-heading"><span>STEP 03</span><h2>{paymentReady ? 'Review & pay' : 'Review & submit'}</h2><p>Review your selected program, pathway, learning mode, details and final payable amount.</p></div>{savedSession ? <div className="enrol-inline-warning" role="status"><Check size={17} /><span>Admission reference: <strong>{savedSession.reference}</strong>. Your registration is saved; payment is confirmed only after server verification.</span></div> : <div className="enrol-inline-warning" role="status"><CircleAlert size={17} /><span>Reviewing does not submit your registration. The admission reference is created and shown after you submit this step.</span></div>}<div className="enrol-review-card"><div className="enrol-review-head"><span><GraduationCap size={18} /> {program?.name}</span><button type="button" className="enrol-review-edit" onClick={() => { setStep(0); setRecovery(current => ({ ...current, step: 0 })) }}>Change program</button></div><div className="enrol-review-grid"><div><small>STUDENT</small><b>{form.fullName}</b></div><div><small>PROGRAM DURATION</small><b>{programName} · {program?.durationDays ?? 75} days</b></div>{form.programCode === 'class-12' && <div><small>SUBJECT PATHWAY</small><b>Physics · Chemistry · {form.subjectChoice}</b></div>}<div><small>LEARNING MODE</small><b>{form.learningMode ? deliveryOptions[form.learningMode].label : 'Not selected'}</b></div><div><small>MOBILE</small><b>{form.mobile}</b></div><div><small>EMAIL</small><b>{form.email}</b></div><div><small>BOARD</small><b>{form.board}</b></div><div><small>SCHOOL</small><b>{form.schoolName}</b></div></div>{fee}</div><div className="enrol-refund-policy"><strong>REFUND POLICY</strong><p>Students may submit refund requests within 7 calendar days from the date of successful payment. Submission of a refund request does not guarantee approval. All requests are subject to review by RadixMinds management. The administration will determine the eligibility and approved refund amount on a case-by-case basis, subject to applicable laws and the published terms and conditions.</p></div><div className="enrol-consent-list"><PolicyAcknowledgement checked={form.policyAcknowledged} onChange={setField} error={errors.policyAcknowledged} /></div>{!paymentReady && <div className="enrol-inline-warning"><Clock3 size={17} /><span>Online payment is not active in this phase. If your enrolment is accepted, it will remain pending payment until the team shares the next step. No payment is confirmed here.</span></div>}{!policiesApproved && <div className="enrol-inline-warning" role="status"><LockKeyhole size={17} /><span>Enrolment submission is paused until the approved policies and consent workflow are ready. No student details will be saved until the server-side policy gate is approved. Read the <Link to="/terms-and-conditions">Terms</Link>, <Link to="/privacy-policy">Privacy Policy</Link> and <Link to="/refund-policy">Refund Policy</Link>. <Link to="/contact">Contact Radix Minds</Link>.</span></div>}</div>}
         {message && <div className="enrol-message" role="alert"><CircleAlert size={17} />{message}</div>}
-        <div className="enrol-form-actions">{step > 0 && <button type="button" className="enrol-back-button" onClick={previousStep} disabled={busy}><ArrowLeft size={16} /> Back</button>}{step < 2 ? <button type="button" className="enrol-next-button" onClick={nextStep} disabled={busy}>{step === 0 ? 'Continue with this program' : 'Continue'} <ArrowRight size={16} /></button> : <><button type="button" className="enrol-next-button" onClick={savedSession && paymentReady ? paymentAttemptExists && !canStartPayment(paymentOutcome, paymentAttemptExists) ? () => checkPaymentStatus(savedSession) : () => launchPayment(savedSession, true) : saveAndPay} disabled={busy || !program?.enrolmentOpen || !policiesApproved || paymentOutcome === 'needs_review'}><LockKeyhole size={16} />{busy ? (paymentReady ? 'Preparing secure checkout…' : 'Submitting enrolment…') : savedSession && paymentReady ? paymentAttemptExists && !canStartPayment(paymentOutcome, paymentAttemptExists) ? 'Check payment status' : 'Retry secure payment' : paymentReady ? 'Pay securely' : 'Submit enrolment' }<ArrowRight size={16} /></button>{program && !program.enrolmentOpen && <p className="enrol-config-caption">Enrolment for this program is closed. <Link to="/contact">Contact the team</Link>.</p>}</>}</div>
+        <div className="enrol-form-actions">{step > 0 && <button type="button" className="enrol-back-button" onClick={previousStep} disabled={busy}><ArrowLeft size={16} /> Back</button>}{step < 2 ? <button type="button" className="enrol-next-button" onClick={nextStep} disabled={busy}>{step === 0 ? 'Continue with this program' : 'Continue'} <ArrowRight size={16} /></button> : <><button type="button" className="enrol-next-button" onClick={savedSession && paymentReady ? !canStartPayment(paymentOutcome, paymentAttempt) ? () => checkPaymentStatus(savedSession) : () => launchPayment(savedSession, true) : saveAndPay} disabled={busy || !program?.enrolmentOpen || !policiesApproved || paymentOutcome === 'needs_review'}><LockKeyhole size={16} />{busy ? (paymentReady ? 'Preparing secure checkout…' : 'Submitting enrolment…') : savedSession && paymentReady ? !canStartPayment(paymentOutcome, paymentAttempt) ? 'Check payment status' : 'Retry secure payment' : paymentReady ? 'Pay securely' : 'Submit enrolment' }<ArrowRight size={16} /></button>{program && !program.enrolmentOpen && <p className="enrol-config-caption">Enrolment for this program is closed. <Link to="/contact">Contact the team</Link>.</p>}</>}</div>
       </form>
     </div><aside className="enrolment-aside"><span className="enrol-aside-icon"><ShieldCheck size={23} /></span><small>YOUR ENROLMENT</small><h2>A clear next step.</h2><ul><li><Check size={15} />75-day preparation program</li><li><Check size={15} />Student details reviewed</li><li><Check size={15} />Payment status shown accurately</li><li><Check size={15} />No card details stored on this site</li></ul>{program && <div className="enrol-aside-fee"><span>SELECTED PROGRAM</span><strong>{program.name}</strong><small>{program.durationDays} days{program.discountPercent !== null ? ` · ${program.discountPercent}% verified offer` : ''}</small><b>{formatINR(program.payablePaise)}</b></div>}<p><LockKeyhole size={14} />{paymentReady ? 'Checkout opens securely with Razorpay after server validation.' : 'Payment remains pending until the team provides the approved payment step.'}</p></aside></div>
   </div></section>
@@ -338,7 +338,7 @@ export function EnrolmentConfirmationPage() {
     finally{setRefundBusy(false)}
   }
   const retrySecurePayment=async()=>{
-    if(!sessionInfo||!status?.checkoutReady||!canStartPayment(status.status,Boolean(status.payment?.reference))||checkoutBusy)return
+    if(!sessionInfo||!status?.checkoutReady||!canStartPayment(status.status,status.payment)||checkoutBusy)return
     setCheckoutBusy(true);setCheckoutMessage('')
     try{
       const order=await api<CheckoutOrder>(`/enrolments/${sessionInfo.reference}/payment-orders`,{method:'POST',headers:{'Idempotency-Key':submittedRecovery.paymentIdempotencyKey},body:'{}'})
@@ -349,8 +349,8 @@ export function EnrolmentConfirmationPage() {
         try{
           let statusRefreshed=false
           const fetchStatus=async()=>{statusRefreshed=true;return refreshStatus(sessionInfo)}
-          const outcome=await resolveCheckoutOutcome(event,verify??(async()=>({status:'pending' as const})),fetchStatus)
-          const currentOutcome=statusRefreshed?outcome:(await fetchStatus()).status
+          const result=await resolveCheckoutOutcome(event,verify??(async()=>({status:'pending' as const})),fetchStatus)
+          const currentOutcome=statusRefreshed?result.status:(await fetchStatus()).status
           setCheckoutMessage(currentOutcome==='failed'?'The server verified that payment failed. Your enrolment remains unpaid; you can retry secure payment.':currentOutcome==='pending'?'Payment is still pending verification. Refresh or check the status again before retrying.':currentOutcome==='needs_review'?'Payment needs a manual review. Do not retry until Radix Minds has checked it.':'Payment has been verified. Your admission status has been updated.')
         }catch(cause){setCheckoutMessage(cause instanceof Error?cause.message:'Payment status is still being checked. Refresh the status before retrying.')}
         finally{setCheckoutBusy(false)}
@@ -407,7 +407,7 @@ export function EnrolmentConfirmationPage() {
     return <section className="enrol-confirm-page"><div className="enrol-confirm-card"><span className="enrol-confirm-symbol is-pending"><Clock3 size={28} /></span><span className="public-card-eyebrow">ENROLMENT RECEIVED · PAYMENT PENDING</span><h1>We’ve received your enrolment request.</h1><p>Your request is saved as pending payment. This is not payment confirmation or a confirmed paid enrolment. The Radix Minds team will share the next step.</p><div className="enrol-receipt"><div><small>ENROLMENT REFERENCE</small><b>{status.enrolmentReference}</b></div><div><small>STUDENT</small><b>{status.studentName}</b></div><div><small>PROGRAM</small><b>{status.program.name} · {status.program.duration_days} days</b></div><div><small>SUBJECTS</small><b>{status.subjects.join(' · ')}</b></div><div><small>LEARNING MODE</small><b>{status.program.learning_mode_label}</b></div><div><small>PROGRAM START</small><b>{bootcampDates.start}</b></div><div className="enrol-receipt-total"><small>AMOUNT DUE · PAYMENT NOT RECEIVED</small><strong>{formatINR(status.price.payable_paise)}</strong></div></div>{status.checkoutReady&&<button className="button button-gold" type="button" disabled={checkoutBusy} onClick={()=>void retrySecurePayment()}>{checkoutBusy?'Preparing secure checkout…':'Continue to secure payment'}</button>}{checkoutMessage&&<p role="status">{checkoutMessage}</p>}<div className="enrol-next-instructions"><span><MessageCircle size={17} /> NEXT STEP</span><p>Contact the team with your enrolment reference for payment instructions. Do not send card details by message.</p><div><a href={`https://wa.me/${waPhone}`} target="_blank" rel="noreferrer">WhatsApp the team <ArrowRight size={14} /></a><Link to="/contact">Contact options <ArrowRight size={14} /></Link></div></div></div></section>
   }
   if (!status || (checking && status.status !== 'confirmed' && status.status !== 'failed' && status.status !== 'needs_review')) return <section className="enrol-confirm-page"><div className="enrol-confirm-card"><span className="enrol-confirm-symbol is-pending"><Clock3 size={28} /></span><span className="public-card-eyebrow">PAYMENT VERIFICATION</span><h1>Checking with Razorpay…</h1><p>Your enrolment is confirmed only after our server verifies the captured payment. Please keep this page open.</p>{displayReference && <small>Enrolment reference: {displayReference}</small>}</div></section>
-  if (status.status !== 'confirmed') { return <section className="enrol-confirm-page"><div className="enrol-confirm-card"><span className="enrol-confirm-symbol is-pending"><CircleAlert size={28} /></span><span className="public-card-eyebrow">PAYMENT NOT CONFIRMED</span><h1>{status.status === 'failed' ? 'Payment wasn’t completed.' : 'We need to check this payment.'}</h1><p>{status.status === 'failed' ? 'Your registration details are saved. You can retry secure checkout or contact the team.' : 'Please don’t submit another payment until the Radix Minds team has checked this transaction.'}</p><span className="enrol-confirm-reference">{status.enrolmentReference}</span>{canStartPayment(status.status,Boolean(status.payment?.reference))&&status.checkoutReady&&<button className="button button-gold" type="button" disabled={checkoutBusy} onClick={()=>void retrySecurePayment()}>{checkoutBusy?'Preparing secure checkout…':status.status==='failed'?'Retry secure payment':'Continue to secure payment'}</button>}{status.status==='pending'&&status.payment?.reference&&<button className="button button-gold" type="button" disabled={checkoutBusy} onClick={()=>void checkConfirmationStatus()}>{checkoutBusy?'Checking payment…':'Check payment status'}</button>}{checkoutMessage&&<p role="status">{checkoutMessage}</p>}<Link to="/contact">Contact Radix Minds</Link></div></section> }
+  if (status.status !== 'confirmed') { return <section className="enrol-confirm-page"><div className="enrol-confirm-card"><span className="enrol-confirm-symbol is-pending"><CircleAlert size={28} /></span><span className="public-card-eyebrow">PAYMENT NOT CONFIRMED</span><h1>{status.status === 'failed' ? 'Payment wasn’t completed.' : 'We need to check this payment.'}</h1><p>{status.status === 'failed' ? 'Your registration details are saved. You can retry secure checkout or contact the team.' : 'Please don’t submit another payment until the Radix Minds team has checked this transaction.'}</p><span className="enrol-confirm-reference">{status.enrolmentReference}</span>{canStartPayment(status.status,status.payment)&&status.checkoutReady&&<button className="button button-gold" type="button" disabled={checkoutBusy} onClick={()=>void retrySecurePayment()}>{checkoutBusy?'Preparing secure checkout…':status.status==='failed'?'Retry secure payment':'Continue to secure payment'}</button>}{status.status==='pending'&&status.payment?.reference&&<button className="button button-gold" type="button" disabled={checkoutBusy} onClick={()=>void checkConfirmationStatus()}>{checkoutBusy?'Checking payment…':'Check payment status'}</button>}{checkoutMessage&&<p role="status">{checkoutMessage}</p>}<Link to="/contact">Contact Radix Minds</Link></div></section> }
   const amount = status.payment?.amountPaise ?? status.price.payable_paise
   const waPhone = status.support.whatsappPhone.replace(/\D/g, '')
   return <section className="enrol-confirm-page"><div className="enrol-confirm-card is-success"><span className="enrol-confirm-symbol"><BadgeCheck size={32} /></span><span className="public-card-eyebrow">PAID ENROLMENT · VERIFIED</span><h1>You’re enrolled, {status.studentName.split(' ')[0]}.</h1><p>Your payment has been verified by our server. The Radix Minds team will share batch details and next steps through the contact channels below.</p><div className="enrol-receipt"><span className="enrol-receipt-title"><CreditCard size={17} /> PAYMENT ACKNOWLEDGEMENT</span><div><small>ENROLMENT ID</small><b>{status.enrolmentReference}</b></div><div><small>PROGRAM</small><b>{status.program.name} · {status.program.duration_days} days</b></div><div><small>SUBJECTS</small><b>{status.subjects.join(' · ')}</b></div><div><small>LEARNING MODE</small><b>{status.program.learning_mode_label}</b></div><div><small>PAYMENT REFERENCE</small><b>{status.payment?.reference ?? 'Verified by Razorpay'}</b></div><div className="enrol-receipt-total"><small>AMOUNT PAID</small><strong>{formatINR(amount)}</strong></div></div><div className="enrol-next-instructions"><span><MessageCircle size={17} /> BATCH JOINING DETAILS</span><p>Message Radix Minds on WhatsApp or Telegram to receive the batch communication instructions. You will not be added to a private group without your consent.</p><div><a href={`https://wa.me/${waPhone}`} target="_blank" rel="noreferrer">WhatsApp the team <ArrowRight size={14} /></a><a href={status.support.telegramUrl} target="_blank" rel="noreferrer">Open Telegram <ArrowRight size={14} /></a></div></div><section className="student-refund-request"><strong>REFUND POLICY</strong><p>Students may submit refund requests within 7 calendar days from the date of successful payment. Submission of a refund request does not guarantee approval. All requests are subject to review by RadixMinds management. The administration will determine the eligibility and approved refund amount on a case-by-case basis, subject to applicable laws and the published terms and conditions.</p>{status.refundRequest?<div className="student-refund-status"><b>Request {status.refundRequest.reference}</b><span>Status: {status.refundRequest.status.replace(/_/g,' ')}</span>{status.refundRequest.approvedAmountPaise!==null&&<span>Approved amount: {formatINR(status.refundRequest.approvedAmountPaise)}</span>}<small>Submission does not guarantee approval. Radix Minds will communicate its decision directly.</small></div>:<><label>Reason for request<textarea value={refundReason} onChange={event=>setRefundReason(event.target.value)} minLength={4} maxLength={2000} rows={3} placeholder="Tell us why you are requesting a refund" /></label><button type="button" disabled={refundBusy||refundReason.trim().length<4} onClick={()=>void submitRefundRequest()}>{refundBusy?'Submitting request…':'Submit refund request for review'}</button></>}{refundMessage&&<p role="status">{refundMessage}</p>}</section><button className="enrol-print-button" type="button" onClick={() => window.print()}>Print payment acknowledgement</button><p className="enrol-receipt-footnote">Keep this page or save it as PDF for your records. This acknowledgement is generated from the verified payment details.</p></div></section>
