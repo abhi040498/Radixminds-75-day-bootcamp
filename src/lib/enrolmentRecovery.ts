@@ -106,7 +106,7 @@ function clearLegacySession(storage: StorageLike | null) {
   } catch { /* Ignore unavailable legacy storage. */ }
 }
 
-/** Whitelist-only persistence: never writes form fields, consent, credentials or session tokens. */
+/** Browser persistence is whitelist-only: selections and non-authorizing keys only. */
 export function saveEnrolmentDraft(storage: StorageLike | null, value: EnrolmentDraft) {
   if (!storage) return
   const safeDraft = normalizeDraft(value, randomUuid)
@@ -114,7 +114,7 @@ export function saveEnrolmentDraft(storage: StorageLike | null, value: Enrolment
   try { storage.setItem(ENROLMENT_DRAFT_KEY, JSON.stringify(safeDraft)) } catch { /* Storage may be unavailable; the in-memory form still works. */ }
 }
 
-/** Personal details and policy acknowledgement are intentionally cleared on refresh. */
+/** Returns the locally remembered step; personal details are restored only from the server draft. */
 export function restoreEnrolmentStep(draft: EnrolmentDraft): 0 | 1 | 2 {
   if (draft.enrolmentReference) return 2
   if (draft.step === 0) return 0

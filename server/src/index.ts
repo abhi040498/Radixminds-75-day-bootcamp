@@ -1,5 +1,5 @@
 import express, { type ErrorRequestHandler } from 'express'
-import { randomUUID } from 'node:crypto'
+import { randomBytes, randomUUID } from 'node:crypto'
 import cors from 'cors'
 import helmet from 'helmet'
 import rateLimit from 'express-rate-limit'
@@ -18,6 +18,8 @@ import { paymentOrderStore } from './paymentOrderStore.js'
 import { resolveEnrolmentProgramSelection, type EnrolmentProgram } from './enrolmentProgramSelection.js'
 import { buildWhatsAppConfirmationDraft, isWhatsAppConfirmationEligible } from './whatsappConfirmation.js'
 import { enrolmentSessionCookieName, isSameOriginCookieRequest, readCookieValue } from './enrolmentSession.js'
+import { enrolmentDraftPayloadSchema, publicDraft, restoreEnrolmentDraft, saveEnrolmentDraft } from './enrolmentDraft.js'
+import { enrolmentDraftStore } from './enrolmentDraftStore.js'
 
 const app = express()
 app.disable('x-powered-by')
@@ -33,6 +35,23 @@ app.use((req, res, next) => {
 const publicLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 30, standardHeaders: 'draft-8', legacyHeaders: false })
 const checkoutLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 8, standardHeaders: 'draft-8', legacyHeaders: false })
 const adminLoginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 8, standardHeaders: 'draft-8', legacyHeaders: false })
+const draftLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 90, standardHeaders: 'draft-8', legacyHeaders: false })
+const DRAFT_COOKIE = 'rm_enrolment_draft'
+const DRAFT_COOKIE_PATH = '/api/v1'
+const DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000
+
+function draftCookieOptions() {
+  return { httpOnly: true, secure: new URL(config.APP_ORIGIN).protocol === 'https:', sameSite: 'strict' as const, path: DRAFT_COOKIE_PATH, maxAge: DRAFT_TTL_MS }
+}
+function clearDraftCookie(res: express.Response) {
+  const options = draftCookieOptions()
+  res.clearCookie(DRAFT_COOKIE, { httpOnly: options.httpOnly, secure: options.secure, sameSite: options.sameSite, path: options.path })
+}
+function draftTokenFromRequest(req: express.Request) {
+  const token = readCookie(req, DRAFT_COOKIE)
+  return /^[A-Za-z0-9_-]{43}$/.test(token) ? token : ''
+}
+function setNoStore(res: express.Response) { res.setHeader('Cache-Control', 'private, no-store') }
 
 type ApiErrorCode = 'CONFIGURATION_REQUIRED' | 'VALIDATION_ERROR' | 'NOT_FOUND' | 'PAYMENT_PENDING' | 'PAYMENT_FAILED' | 'PAYMENT_MISMATCH' | 'ALREADY_CONFIRMED'
 function fail(res: express.Response, status: number, code: ApiErrorCode | string, message: string, fields?: Record<string, string>) {
@@ -133,6 +152,96 @@ app.get('/api/v1/programs', async (_req, res) => {
   return res.json({ programs })
 })
 
+const draftSessionSchema = z.object({ registrationIdempotencyKey: z.uuid(), paymentIdempotencyKey: z.uuid() }).strict()
+app.get('/api/v1/enrolment-draft', draftLimiter, async (req, res) => {
+  setNoStore(res)
+  if (!isSameOriginCookieRequest(req.get('origin'), req.get('sec-fetch-site'), config.APP_ORIGIN)) return fail(res, 403, 'ORIGIN_REJECTED', 'Request origin is not allowed.')
+  if (!hasDatabase) return databaseUnavailable(res)
+  const token = draftTokenFromRequest(req)
+  if (!token) {
+    if (readCookie(req, DRAFT_COOKIE)) clearDraftCookie(res)
+    return res.json({ draft: null })
+  }
+  try {
+    const record = await restoreEnrolmentDraft(enrolmentDraftStore, sha256(token))
+    if (!record) {
+      clearDraftCookie(res)
+      return res.json({ draft: null, expired: true })
+    }
+    return res.json(publicDraft(record))
+  } catch {
+    return fail(res, 503, 'DRAFT_UNAVAILABLE', 'Saved enrolment details could not be loaded. Please retry; your current form remains available.')
+  }
+})
+
+app.post('/api/v1/enrolment-draft/session', draftLimiter, csrfOriginGuard, async (req, res) => {
+  setNoStore(res)
+  if (!hasDatabase) return databaseUnavailable(res)
+  const parsed = draftSessionSchema.safeParse(req.body)
+  if (!parsed.success) return fail(res, 422, 'VALIDATION_ERROR', 'The draft session request is invalid.')
+  const existingToken = draftTokenFromRequest(req)
+  const now = new Date()
+  try {
+    if (existingToken) {
+      const existing = await restoreEnrolmentDraft(enrolmentDraftStore, sha256(existingToken), now)
+      if (existing) return res.json(publicDraft(existing))
+      await enrolmentDraftStore.delete(sha256(existingToken))
+      clearDraftCookie(res)
+    }
+    const token = randomBytes(32).toString('base64url')
+    const expiresAt = new Date(now.getTime() + DRAFT_TTL_MS)
+    const record = await enrolmentDraftStore.create({
+      sessionTokenHash: sha256(token),
+      registrationIdempotencyKey: parsed.data.registrationIdempotencyKey,
+      paymentIdempotencyKey: parsed.data.paymentIdempotencyKey,
+      now: now.toISOString(),
+      expiresAt: expiresAt.toISOString(),
+    })
+    res.cookie(DRAFT_COOKIE, token, draftCookieOptions())
+    return res.status(201).json(publicDraft(record))
+  } catch {
+    return fail(res, 503, 'DRAFT_UNAVAILABLE', 'A secure draft session could not be started. Your form data remains on this page; retry saving.')
+  }
+})
+
+app.put('/api/v1/enrolment-draft', draftLimiter, csrfOriginGuard, async (req, res) => {
+  setNoStore(res)
+  if (!hasDatabase) return databaseUnavailable(res)
+  const token = draftTokenFromRequest(req)
+  if (!token) return fail(res, 401, 'DRAFT_SESSION_REQUIRED', 'Start a secure draft session before saving details.')
+  const revision = z.number().int().nonnegative().safeParse(req.body?.expectedRevision)
+  const payload = enrolmentDraftPayloadSchema.safeParse(req.body?.draft)
+  if (!revision.success || !payload.success) return fail(res, 422, 'VALIDATION_ERROR', 'Check the saved enrolment details and try again.')
+  try {
+    const result = await saveEnrolmentDraft(enrolmentDraftStore, { sessionTokenHash: sha256(token), expectedRevision: revision.data, payload: payload.data })
+    if (!result.ok && result.reason === 'invalid') return fail(res, 422, 'VALIDATION_ERROR', 'Check the saved enrolment details and try again.')
+    if (!result.ok) {
+      const current = await enrolmentDraftStore.find(sha256(token))
+      if (!current || Date.parse(current.expires_at) <= Date.now()) {
+        clearDraftCookie(res)
+        return fail(res, 410, 'DRAFT_EXPIRED', 'This saved draft expired. Your current details remain on this page; save again to start a new secure draft.')
+      }
+      return fail(res, 409, 'DRAFT_REVISION_CONFLICT', 'This draft changed in another tab. Reload the saved details before saving again.')
+    }
+    // Keep browser and database expiry aligned with the seven-day inactivity TTL.
+    res.cookie(DRAFT_COOKIE, token, draftCookieOptions())
+    return res.json(publicDraft(result.record))
+  } catch {
+    return fail(res, 503, 'DRAFT_SAVE_FAILED', 'Your details are still on this page but could not be saved. Retry the save before leaving.')
+  }
+})
+
+app.delete('/api/v1/enrolment-draft', draftLimiter, csrfOriginGuard, async (req, res) => {
+  setNoStore(res)
+  const token = draftTokenFromRequest(req)
+  if (token && hasDatabase) {
+    try { await enrolmentDraftStore.delete(sha256(token)) }
+    catch { return fail(res, 503, 'DRAFT_DELETE_FAILED', 'The saved draft could not be invalidated. Please retry.') }
+  }
+  clearDraftCookie(res)
+  return res.status(204).end()
+})
+
 app.post('/api/v1/enrolments', publicLimiter, csrfOriginGuard, async (req, res) => {
   if (!hasDatabase) return databaseUnavailable(res)
   if (config.POLICIES_APPROVED !== 'true') return fail(res, 503, 'POLICIES_NOT_APPROVED', 'Enrolment submissions are temporarily unavailable while the approved policies and consent workflow are being prepared. Please contact Radix Minds.')
@@ -140,6 +249,16 @@ app.post('/api/v1/enrolments', publicLimiter, csrfOriginGuard, async (req, res) 
   if (!parsed.success) return fail(res, 422, 'VALIDATION_ERROR', 'Please check the highlighted fields and try again.', Object.fromEntries(parsed.error.issues.map(issue => [String(issue.path[0] ?? 'form'), issue.message])))
   const idempotencyKey = req.get('idempotency-key')
   if (!validIdempotencyKey(idempotencyKey)) return fail(res, 400, 'IDEMPOTENCY_KEY_REQUIRED', 'Refresh the registration form and try again.')
+
+  const draftToken = draftTokenFromRequest(req)
+  if (draftToken) {
+    try {
+      const savedDraft = await restoreEnrolmentDraft(enrolmentDraftStore, sha256(draftToken))
+      if (savedDraft && savedDraft.registrationIdempotencyKey !== idempotencyKey) return fail(res, 409, 'DRAFT_IDEMPOTENCY_CONFLICT', 'This saved draft no longer matches the registration request. Reload your saved enrolment and try again.')
+    } catch {
+      return fail(res, 503, 'DRAFT_UNAVAILABLE', 'The saved registration could not be checked. Please retry before submitting.')
+    }
+  }
 
   const input = parsed.data
   if (input.programCode === 'class-10' && input.subjectChoice) return fail(res, 422, 'INVALID_PATHWAY', 'Class 10 does not require a pathway selection.')
@@ -197,6 +316,11 @@ app.post('/api/v1/enrolments', publicLimiter, csrfOriginGuard, async (req, res) 
   const { data: result, error } = await db.rpc('create_pending_enrolment', { p_input: rpcInput })
   const created = Array.isArray(result) ? result[0] : result
   if (error || !created?.enrolment_id || !created.public_reference) return fail(res, 503, 'REGISTRATION_SAVE_FAILED', 'We could not save your registration just now. Please try again or contact the team.')
+  if (draftToken) {
+    try { await enrolmentDraftStore.delete(sha256(draftToken), idempotencyKey) }
+    catch { /* The cookie is revoked below; any private orphan expires automatically within seven days. */ }
+    clearDraftCookie(res)
+  }
   const enrolmentCookie = enrolmentSessionCookieName(created.public_reference)
   if (!enrolmentCookie) return fail(res, 503, 'REGISTRATION_REFERENCE_INVALID', 'The saved registration reference could not be confirmed. Contact Radix Minds before submitting again.')
   const secureCookie = new URL(config.APP_ORIGIN).protocol === 'https:'
