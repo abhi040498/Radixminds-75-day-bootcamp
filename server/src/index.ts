@@ -19,6 +19,7 @@ import { paymentOrderStore } from './paymentOrderStore.js'
 import { resolveEnrolmentProgramSelection, type EnrolmentProgram } from './enrolmentProgramSelection.js'
 import { buildWhatsAppConfirmationDraft, isWhatsAppConfirmationEligible } from './whatsappConfirmation.js'
 import { enrolmentSessionCookieName, isSameOriginCookieRequest, readCookieValue } from './enrolmentSession.js'
+import { maskRazorpayKeyId, razorpayDiagnostic } from './razorpayDiagnostics.js'
 
 const app = express()
 app.disable('x-powered-by')
@@ -86,7 +87,33 @@ function createRazorpayOrderProvider() {
   // indefinitely. Database fencing remains authoritative if a worker resumes late.
   const api = client.api as unknown as { rq: { defaults: { timeout: number } } }
   api.rq.defaults.timeout = 20_000
-  return { createOrder: (input: Parameters<typeof client.orders.create>[0]) => client.orders.create(input) }
+  return {
+    createOrder: async (input: Parameters<typeof client.orders.create>[0]) => {
+      try {
+        const order = await client.orders.create(input)
+        console.info('razorpay_api_operation', {
+          environment: config.RAZORPAY_MODE,
+          keyIdMasked: maskRazorpayKeyId(config.RAZORPAY_KEY_ID),
+          orderId: typeof order.id === 'string' ? order.id : null,
+          operation: 'orders.create',
+          httpStatus: 200,
+          errorCode: null,
+          description: null,
+        })
+        return order
+      } catch (error) {
+        const diagnostic = razorpayDiagnostic(error)
+        console.error('razorpay_api_operation', {
+          environment: config.RAZORPAY_MODE,
+          keyIdMasked: maskRazorpayKeyId(config.RAZORPAY_KEY_ID),
+          orderId: null,
+          operation: 'orders.create',
+          ...diagnostic,
+        })
+        throw error
+      }
+    },
+  }
 }
 function normalizeIndiaMobile(value: string) {
   const digits = value.replace(/\D/g, '')
@@ -276,7 +303,17 @@ function enrollmentTokenFromRequest(req: express.Request, reference: string) {
 function withCheckoutOrder(payment: { id: string; status: string; provider_order_id: string | null; amount_paise: number; currency: string }, reference: string) {
   if (!payment.provider_order_id) throw new Error('ORDER_NOT_READY')
   if (!config.RAZORPAY_KEY_ID) throw new Error('RAZORPAY_NOT_CONFIGURED')
-  return { paymentAttemptId: payment.id, enrolmentReference: reference, orderId: payment.provider_order_id, keyId: config.RAZORPAY_KEY_ID, amount: payment.amount_paise, currency: payment.currency, name: 'Radix Minds', description: '75-Day Board Bootcamp', status: payment.status }
+  const checkoutKeyId = config.RAZORPAY_KEY_ID
+  console.info('razorpay_checkout_configuration', {
+    environment: config.RAZORPAY_MODE,
+    serverKeyIdMasked: maskRazorpayKeyId(config.RAZORPAY_KEY_ID),
+    checkoutKeyIdMasked: maskRazorpayKeyId(checkoutKeyId),
+    keyIdsMatch: config.RAZORPAY_KEY_ID === checkoutKeyId,
+    orderId: payment.provider_order_id,
+    operation: 'checkout_config_response',
+    httpStatus: 200,
+  })
+  return { paymentAttemptId: payment.id, enrolmentReference: reference, orderId: payment.provider_order_id, keyId: checkoutKeyId, amount: payment.amount_paise, currency: payment.currency, name: 'Radix Minds', description: '75-Day Board Bootcamp', status: payment.status }
 }
 
 app.post('/api/v1/enrolments/:reference/payment-orders', checkoutLimiter, csrfOriginGuard, async (req, res) => {
