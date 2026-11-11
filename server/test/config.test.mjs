@@ -132,6 +132,76 @@ test('invalid webhook configuration returns 503 before signature verification', 
   }
 })
 
+test('enrolment submission fails closed before database access when the status-token secret is missing', () => {
+  const directory = mkdtempSync(join(os.tmpdir(), 'radixminds-enrolment-secret-test-'))
+  try {
+    const functionUrl = pathToFileURL(resolve('netlify/functions/api.ts')).href
+    const source = `
+      let fetchCalls = 0;
+      globalThis.fetch = async (input) => {
+        fetchCalls++;
+        const url = new URL(typeof input === 'string' ? input : input.url);
+        if (url.pathname !== '/rest/v1/programs') throw new Error('Unexpected synthetic database request');
+        return Response.json([{
+          id: '00000000-0000-4000-8000-000000000010', code: 'class-10', name: 'Synthetic Class 10',
+          duration_days: 75, subjects: ['Mathematics','Science','Social Science','English'],
+          program_fee_paise: 249900, standard_fee_paise: null, discount_percent: null,
+          offer_valid_until: null, currency: 'INR', is_active: true, enrolment_open: true,
+          program_learning_modes: [{ mode: 'online', label: 'Online', is_available: true, batch_label: null }]
+        }]);
+      };
+      const { handler } = await import(${JSON.stringify(functionUrl)});
+      const response = await handler({
+        httpMethod: 'POST', path: '/api/v1/enrolments',
+        headers: {
+          origin: 'https://example-test-project.netlify.app',
+          'sec-fetch-site': 'same-origin', 'content-type': 'application/json',
+          'idempotency-key': '00000000-0000-4000-8000-000000000099'
+        },
+        body: JSON.stringify({
+          programCode: 'class-10', fullName: 'Synthetic Fixture Student', mobile: '9876543210',
+          email: 'fixture@example.invalid', dateOfBirth: '', board: 'CBSE', schoolName: 'Synthetic School',
+          preferredLanguage: 'English', subjectChoice: null, learningMode: 'online',
+          whatsappUpdatesConsent: false, whatsappMobile: '', policyAcknowledged: true,
+          policyVersions: { terms: '2026-11-10', privacy: '2026-11-10', refund: '2026-11-10' }
+        }),
+        isBase64Encoded: false, requestContext: { identity: { sourceIp: '127.0.0.1' } }
+      }, {});
+      console.log(JSON.stringify({ statusCode: response.statusCode, body: response.body, fetchCalls }));
+    `
+    const result = spawnSync(process.execPath, ['--import', 'tsx', '--input-type=module', '-e', source], {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+      env: {
+        PATH: process.env.PATH,
+        SystemRoot: process.env.SystemRoot,
+        TEMP: process.env.TEMP,
+        TMP: process.env.TMP,
+        DOTENV_CONFIG_PATH: join(directory, 'does-not-exist'),
+        NODE_ENV: 'test',
+        APP_ORIGIN: 'https://example-test-project.netlify.app',
+        SUPABASE_URL: 'http://127.0.0.1:54321',
+        SUPABASE_SECRET_KEY: 'synthetic-database-secret-fixture',
+        RAZORPAY_KEY_ID: 'rzp_test_syntheticfixture',
+        RAZORPAY_KEY_SECRET: 'synthetic-razorpay-secret-fixture',
+        PAYMENT_ENABLED: 'true',
+        POLICIES_APPROVED: 'true',
+        RAZORPAY_MODE: 'test',
+      },
+    })
+    assert.equal(result.status, 0, 'the isolated function request should complete')
+    const output = result.stdout.trim().split(/\r?\n/).at(-1)
+    const response = JSON.parse(output)
+    assert.equal(response.statusCode, 503, 'missing status-token configuration must not become an unhandled 500')
+    assert.equal(JSON.parse(response.body).error.code, 'REGISTRATION_NOT_CONFIGURED')
+    assert.equal(response.fetchCalls, 0, 'the request must fail before any Supabase operation')
+    assert.equal(response.body.includes('Synthetic Fixture Student'), false)
+    assert.equal(response.body.includes('fixture@example.invalid'), false)
+  } finally {
+    rmSync(directory, { recursive: true, force: true })
+  }
+})
+
 test('function startup diagnostic reports only presence, length and threshold result', () => {
   const secretFixture = 'synthetic-private-value-not-for-logs'
   const result = inspectConfiguration(secretFixture, true)

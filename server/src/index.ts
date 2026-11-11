@@ -158,6 +158,10 @@ app.get('/api/v1/programs', async (_req, res) => {
 app.post('/api/v1/enrolments', publicLimiter, csrfOriginGuard, async (req, res) => {
   if (!hasDatabase) return databaseUnavailable(res)
   if (config.POLICIES_APPROVED !== 'true') return fail(res, 503, 'POLICIES_NOT_APPROVED', 'Enrolment submissions are temporarily unavailable while the approved policies and consent workflow are being prepared. Please contact Radix Minds.')
+  // The status token is persisted as a hash and is required to authorize later
+  // status/payment requests. Fail before any database reads or writes instead
+  // of allowing createStatusToken() to throw an opaque 500 below.
+  if (!config.STATUS_TOKEN_SECRET) return fail(res, 503, 'REGISTRATION_NOT_CONFIGURED', 'Registration is temporarily unavailable. Please contact the Radix Minds team.')
   const parsed = enrolmentSchema.safeParse(req.body)
   if (!parsed.success) return fail(res, 422, 'VALIDATION_ERROR', 'Please check the highlighted fields and try again.', Object.fromEntries(parsed.error.issues.map(issue => [String(issue.path[0] ?? 'form'), issue.message])))
   const idempotencyKey = req.get('idempotency-key')
