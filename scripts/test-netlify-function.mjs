@@ -61,19 +61,19 @@ if (config.payload.policiesApproved !== false) throw new Error('/api/v1/config r
 if (config.payload.paymentMode !== 'test') throw new Error('/api/v1/config does not report Test Mode')
 console.log(`/api/v1/config: ${config.status}`)
 
-const preflight = await request('/api/v1/enrolment-draft', 'OPTIONS', null, {
-  'access-control-request-method': 'PUT',
-  'access-control-request-headers': 'content-type',
+const preflight = await request('/api/v1/enrolments', 'OPTIONS', null, {
+  'access-control-request-method': 'POST',
+  'access-control-request-headers': 'content-type,idempotency-key',
 })
 const responseHeader = (headers, name) => Object.entries(headers ?? {}).find(([key]) => key.toLowerCase() === name.toLowerCase())?.[1]
 if (preflight.status !== 204
   || responseHeader(preflight.headers, 'access-control-allow-origin') !== process.env.APP_ORIGIN
   || responseHeader(preflight.headers, 'access-control-allow-credentials') !== 'true'
-  || !String(responseHeader(preflight.headers, 'access-control-allow-methods') ?? '').split(',').map(value => value.trim()).includes('PUT')) {
-  throw new Error('Netlify Function CORS preflight did not allow the exact configured origin and credentialed PUT request.')
+  || !String(responseHeader(preflight.headers, 'access-control-allow-methods') ?? '').split(',').map(value => value.trim()).includes('POST')) {
+  throw new Error('Netlify Function CORS preflight did not allow the exact configured origin and credentialed POST request.')
 }
-console.log('/api/v1/enrolment-draft OPTIONS: 204; exact-origin credentialed PUT preflight passed')
-const rejectedPreflight = await request('/api/v1/enrolment-draft', 'OPTIONS', null, {
+console.log('/api/v1/enrolments OPTIONS: 204; exact-origin credentialed POST preflight passed')
+const rejectedPreflight = await request('/api/v1/enrolments', 'OPTIONS', null, {
   origin: 'https://attacker.example.invalid',
   'access-control-request-method': 'PUT',
   'access-control-request-headers': 'content-type',
@@ -81,7 +81,18 @@ const rejectedPreflight = await request('/api/v1/enrolment-draft', 'OPTIONS', nu
 if (responseHeader(rejectedPreflight.headers, 'access-control-allow-origin')) {
   throw new Error('Netlify Function CORS preflight reflected an unapproved origin.')
 }
-console.log('/api/v1/enrolment-draft OPTIONS: unapproved origin received no CORS permission')
+console.log('/api/v1/enrolments OPTIONS: unapproved origin received no CORS permission')
+
+for (const [path, method] of [
+  ['/api/v1/enrolment-draft', 'GET'],
+  ['/api/v1/enrolment-draft/session', 'POST'],
+  ['/api/v1/enrolment-draft', 'PUT'],
+  ['/api/v1/enrolment-draft', 'DELETE'],
+]) {
+  const removedDraftRoute = await request(path, method, method === 'GET' ? null : '{}')
+  if (removedDraftRoute.status !== 404) throw new Error(`Removed draft endpoint ${method} ${path} returned ${removedDraftRoute.status}, expected 404.`)
+}
+console.log('Draft API endpoints: GET/POST/PUT/DELETE all return 404')
 
 const orderGate = await request('/api/v1/enrolments/RM-AAAAAAAAAAAAAAAAAAAA/payment-orders', 'POST', '{}')
 const orderGateCode = typeof orderGate.payload?.error?.code === 'string' ? orderGate.payload.error.code : 'none'

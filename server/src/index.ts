@@ -18,9 +18,6 @@ import { paymentOrderStore } from './paymentOrderStore.js'
 import { resolveEnrolmentProgramSelection, type EnrolmentProgram } from './enrolmentProgramSelection.js'
 import { buildWhatsAppConfirmationDraft, isWhatsAppConfirmationEligible } from './whatsappConfirmation.js'
 import { enrolmentSessionCookieName, isSameOriginCookieRequest, readCookieValue } from './enrolmentSession.js'
-import { restoreEnrolmentDraft } from './enrolmentDraft.js'
-import { enrolmentDraftStore } from './enrolmentDraftStore.js'
-import { clearEnrolmentDraftCookie, createEnrolmentDraftRouter, draftTokenFromRequest } from './enrolmentDraftRoutes.js'
 
 const app = express()
 app.disable('x-powered-by')
@@ -37,10 +34,7 @@ app.use((_req, res, next) => {
     const path = _req.path
     const route = path === '/api/health' || path === '/api/v1/config' || path === '/api/v1/programs' || path === '/api/v1/webhooks/razorpay' || path === '/api/v1/payments/verify'
       ? path
-      : path === '/api/v1/enrolment-draft' ? 'enrolment-draft'
-        : path === '/api/v1/enrolment-draft/session' ? 'enrolment-draft-session'
-          : path.startsWith('/api/v1/enrolments/') ? 'enrolment'
-            : 'other'
+      : path.startsWith('/api/v1/enrolments/') ? 'enrolment' : 'other'
     console.info('api_request', {
       requestId,
       route,
@@ -62,7 +56,6 @@ app.use(cors({
 const publicLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 30, standardHeaders: 'draft-8', legacyHeaders: false })
 const checkoutLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 8, standardHeaders: 'draft-8', legacyHeaders: false })
 const adminLoginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 8, standardHeaders: 'draft-8', legacyHeaders: false })
-const draftLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 90, standardHeaders: 'draft-8', legacyHeaders: false })
 type ApiErrorCode = 'CONFIGURATION_REQUIRED' | 'VALIDATION_ERROR' | 'NOT_FOUND' | 'PAYMENT_PENDING' | 'PAYMENT_FAILED' | 'PAYMENT_MISMATCH' | 'ALREADY_CONFIRMED'
 function fail(res: express.Response, status: number, code: ApiErrorCode | string, message: string, fields?: Record<string, string>) {
   return res.status(status).json({ error: { code, message, requestId: res.locals.requestId, ...(fields ? { fields } : {}) } })
@@ -162,12 +155,6 @@ app.get('/api/v1/programs', async (_req, res) => {
   return res.json({ programs })
 })
 
-app.use('/api/v1/enrolment-draft', draftLimiter, createEnrolmentDraftRouter({
-  store: enrolmentDraftStore,
-  appOrigin: config.APP_ORIGIN,
-  databaseConfigured: hasDatabase,
-}))
-
 app.post('/api/v1/enrolments', publicLimiter, csrfOriginGuard, async (req, res) => {
   if (!hasDatabase) return databaseUnavailable(res)
   if (config.POLICIES_APPROVED !== 'true') return fail(res, 503, 'POLICIES_NOT_APPROVED', 'Enrolment submissions are temporarily unavailable while the approved policies and consent workflow are being prepared. Please contact Radix Minds.')
@@ -175,16 +162,6 @@ app.post('/api/v1/enrolments', publicLimiter, csrfOriginGuard, async (req, res) 
   if (!parsed.success) return fail(res, 422, 'VALIDATION_ERROR', 'Please check the highlighted fields and try again.', Object.fromEntries(parsed.error.issues.map(issue => [String(issue.path[0] ?? 'form'), issue.message])))
   const idempotencyKey = req.get('idempotency-key')
   if (!validIdempotencyKey(idempotencyKey)) return fail(res, 400, 'IDEMPOTENCY_KEY_REQUIRED', 'Refresh the registration form and try again.')
-
-  const draftToken = draftTokenFromRequest(req)
-  if (draftToken) {
-    try {
-      const savedDraft = await restoreEnrolmentDraft(enrolmentDraftStore, sha256(draftToken))
-      if (savedDraft && savedDraft.registrationIdempotencyKey !== idempotencyKey) return fail(res, 409, 'DRAFT_IDEMPOTENCY_CONFLICT', 'This saved draft no longer matches the registration request. Reload your saved enrolment and try again.')
-    } catch {
-      return fail(res, 503, 'DRAFT_UNAVAILABLE', 'The saved registration could not be checked. Please retry before submitting.')
-    }
-  }
 
   const input = parsed.data
   if (input.programCode === 'class-10' && input.subjectChoice) return fail(res, 422, 'INVALID_PATHWAY', 'Class 10 does not require a pathway selection.')
@@ -242,11 +219,6 @@ app.post('/api/v1/enrolments', publicLimiter, csrfOriginGuard, async (req, res) 
   const { data: result, error } = await db.rpc('create_pending_enrolment', { p_input: rpcInput })
   const created = Array.isArray(result) ? result[0] : result
   if (error || !created?.enrolment_id || !created.public_reference) return fail(res, 503, 'REGISTRATION_SAVE_FAILED', 'We could not save your registration just now. Please try again or contact the team.')
-  if (draftToken) {
-    try { await enrolmentDraftStore.delete(sha256(draftToken), idempotencyKey) }
-    catch { /* The cookie is revoked below; any private orphan expires automatically within seven days. */ }
-    clearEnrolmentDraftCookie(res, config.APP_ORIGIN)
-  }
   const enrolmentCookie = enrolmentSessionCookieName(created.public_reference)
   if (!enrolmentCookie) return fail(res, 503, 'REGISTRATION_REFERENCE_INVALID', 'The saved registration reference could not be confirmed. Contact Radix Minds before submitting again.')
   const secureCookie = new URL(config.APP_ORIGIN).protocol === 'https:'
@@ -775,10 +747,9 @@ const errorHandler: ErrorRequestHandler = (error, req, res, _next) => {
     ? safeError.code
     : typeof safeError.code === 'string' && /^[A-Za-z0-9_-]{1,40}$/.test(safeError.code) ? safeError.code : undefined
   const rawStatus = typeof safeError.status === 'number' && Number.isInteger(safeError.status) && safeError.status >= 400 && safeError.status <= 599 ? safeError.status : undefined
-  const isDraftRoute = req.path === '/api/v1/enrolment-draft' || req.path === '/api/v1/enrolment-draft/session'
   console.error('api_error', {
     requestId: res.locals.requestId,
-    route: isDraftRoute ? req.path.replace('/api/v1/enrolment-draft', 'enrolment-draft') : 'other',
+    route: req.path.startsWith('/api/v1/enrolments/') ? 'enrolment' : 'other',
     method: req.method,
     name: typeof safeError.name === 'string' && /^[A-Za-z][A-Za-z0-9]*Error$/.test(safeError.name) ? safeError.name : 'unknown',
     errorCode: rawCode,

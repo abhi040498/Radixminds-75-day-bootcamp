@@ -1,6 +1,6 @@
-export const ENROLMENT_DRAFT_KEY = 'radixminds:enrolment-progress:v1'
+export const ENROLMENT_RECOVERY_KEY = 'radixminds:enrolment-progress:v1'
 
-export type EnrolmentDraft = {
+export type EnrolmentRecovery = {
   programCode: 'class-10' | 'class-12' | ''
   subjectChoice: 'Mathematics' | 'Biology' | ''
   learningMode: 'online' | 'hybrid' | 'offline' | ''
@@ -25,100 +25,70 @@ function randomUuid() {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
 }
 
-export function createEnrolmentDraft(makeId = randomUuid): EnrolmentDraft {
+export function createEnrolmentRecovery(makeId = randomUuid): EnrolmentRecovery {
   return {
     programCode: '', subjectChoice: '', learningMode: '', step: 0,
     registrationIdempotencyKey: makeId(), paymentIdempotencyKey: makeId(), enrolmentReference: null,
   }
 }
 
-function normalizeDraft(value: unknown, makeId: () => string): EnrolmentDraft | null {
+function normalizeRecovery(value: unknown, makeId: () => string): EnrolmentRecovery | null {
   if (!value || typeof value !== 'object') return null
   const candidate = value as Record<string, unknown>
-  const programCode = candidate.programCode === 'class-10' || candidate.programCode === 'class-12' ? candidate.programCode : ''
-  const subjectChoice = candidate.subjectChoice === 'Mathematics' || candidate.subjectChoice === 'Biology' ? candidate.subjectChoice : ''
-  const learningMode = candidate.learningMode === 'online' || candidate.learningMode === 'hybrid' || candidate.learningMode === 'offline' ? candidate.learningMode : ''
-  const step = candidate.step === 1 || candidate.step === 2 ? candidate.step : 0
   const reference = typeof candidate.enrolmentReference === 'string' && referencePattern.test(candidate.enrolmentReference) ? candidate.enrolmentReference : null
+  const programCode = reference && (candidate.programCode === 'class-10' || candidate.programCode === 'class-12') ? candidate.programCode : ''
   return {
-    programCode, subjectChoice, learningMode, step,
+    // Unsubmitted selections and form progress are deliberately never restored.
+    programCode,
+    subjectChoice: '',
+    learningMode: '',
+    step: reference ? 2 : 0,
     registrationIdempotencyKey: typeof candidate.registrationIdempotencyKey === 'string' && uuidPattern.test(candidate.registrationIdempotencyKey) ? candidate.registrationIdempotencyKey : makeId(),
     paymentIdempotencyKey: typeof candidate.paymentIdempotencyKey === 'string' && uuidPattern.test(candidate.paymentIdempotencyKey) ? candidate.paymentIdempotencyKey : makeId(),
     enrolmentReference: reference,
   }
 }
 
-export function loadEnrolmentDraft(storage: StorageLike | null, makeId = randomUuid) {
-  if (!storage) return { draft: createEnrolmentDraft(makeId), recovered: false }
-  try {
-    const raw = storage.getItem(ENROLMENT_DRAFT_KEY)
-    if (!raw) return { draft: createEnrolmentDraft(makeId), recovered: false }
-    const draft = normalizeDraft(JSON.parse(raw), makeId)
-    return draft ? { draft, recovered: true } : { draft: createEnrolmentDraft(makeId), recovered: false }
-  } catch {
-    return { draft: createEnrolmentDraft(makeId), recovered: false }
-  }
-}
-
-/** Migrate only selections and the non-authorizing idempotency key from the old session store. */
-export function loadEnrolmentRecovery(localStorage: StorageLike | null, sessionStorage: StorageLike | null, makeId = randomUuid) {
-  const current = loadEnrolmentDraft(localStorage, makeId)
-  if (current.recovered) {
-    clearLegacySession(sessionStorage)
-    return current
-  }
-
-  let legacyProgram: EnrolmentDraft['programCode'] = ''
-  try {
-    const raw = sessionStorage?.getItem('radixminds:enrolment-session')
-    if (raw) {
-      const old = JSON.parse(raw) as Record<string, unknown>
-      legacyProgram = old.programCode === 'class-10' || old.programCode === 'class-12' ? old.programCode : ''
-    }
-  } catch { /* Ignore malformed legacy browser state. */ }
-
-  let oldRegistrationKey: string | null = null
-  try {
-    const oldKey = sessionStorage?.getItem('radixminds:registration-idempotency-key')
-    if (oldKey && uuidPattern.test(oldKey)) oldRegistrationKey = oldKey
-  } catch { /* Ignore unavailable legacy storage. */ }
-
-  if (!legacyProgram && !oldRegistrationKey) {
-    clearLegacySession(sessionStorage)
-    return current
-  }
-  const draft = createEnrolmentDraft(makeId)
-  draft.programCode = legacyProgram
-  draft.registrationIdempotencyKey = oldRegistrationKey ?? draft.registrationIdempotencyKey
-  // Old releases kept the bearer token in sessionStorage. Never migrate the
-  // public reference without its authorization cookie; asking the student to
-  // re-enter details and retry the same idempotency key safely recovers it.
-  draft.step = 1
-  saveEnrolmentDraft(localStorage, draft)
-  clearLegacySession(sessionStorage)
-  return { draft, recovered: true }
-}
-
 function clearLegacySession(storage: StorageLike | null) {
   try {
     storage?.removeItem('radixminds:enrolment-session')
     storage?.removeItem('radixminds:registration-idempotency-key')
-  } catch { /* Ignore unavailable legacy storage. */ }
+  } catch { /* Ignore unavailable browser storage. */ }
 }
 
-/** Browser persistence is whitelist-only: selections and non-authorizing keys only. */
-export function saveEnrolmentDraft(storage: StorageLike | null, value: EnrolmentDraft) {
+/** Restore only idempotency keys and an already-submitted admission reference. */
+export function loadEnrolmentRecovery(localStorage: StorageLike | null, sessionStorage: StorageLike | null, makeId = randomUuid) {
+  let recovery = createEnrolmentRecovery(makeId)
+  try {
+    const raw = localStorage?.getItem(ENROLMENT_RECOVERY_KEY)
+    if (raw) recovery = normalizeRecovery(JSON.parse(raw), makeId) ?? recovery
+  } catch { /* Ignore malformed or unavailable browser storage. */ }
+
+  // Older releases stored an idempotency key in sessionStorage. Keep that
+  // retry protection, but never restore selections or an unverified reference.
+  let migratedRegistrationKey = false
+  try {
+    const oldKey = sessionStorage?.getItem('radixminds:registration-idempotency-key')
+    if (!recovery.enrolmentReference && oldKey && uuidPattern.test(oldKey)) {
+      recovery.registrationIdempotencyKey = oldKey
+      migratedRegistrationKey = true
+    }
+  } catch { /* Ignore unavailable browser storage. */ }
+  if (migratedRegistrationKey) saveEnrolmentRecovery(localStorage, recovery)
+  clearLegacySession(sessionStorage)
+  return { recovery, recovered: Boolean(recovery.enrolmentReference) }
+}
+
+/** Persist only request idempotency keys and a server-issued submitted reference. */
+export function saveEnrolmentRecovery(storage: StorageLike | null, value: EnrolmentRecovery) {
   if (!storage) return
-  const safeDraft = normalizeDraft(value, randomUuid)
-  if (!safeDraft) return
-  try { storage.setItem(ENROLMENT_DRAFT_KEY, JSON.stringify(safeDraft)) } catch { /* Storage may be unavailable; the in-memory form still works. */ }
+  const safeRecovery = normalizeRecovery(value, randomUuid)
+  if (!safeRecovery) return
+  try { storage.setItem(ENROLMENT_RECOVERY_KEY, JSON.stringify(safeRecovery)) } catch { /* Storage may be unavailable; in-memory flow still works. */ }
 }
 
-/** Returns the locally remembered step; personal details are restored only from the server draft. */
-export function restoreEnrolmentStep(draft: EnrolmentDraft): 0 | 1 | 2 {
-  if (draft.enrolmentReference) return 2
-  if (draft.step === 0) return 0
-  return 1
+export function restoreEnrolmentStep(recovery: EnrolmentRecovery): 0 | 1 | 2 {
+  return recovery.enrolmentReference ? 2 : 0
 }
 
 export function isEnrolmentReference(value: unknown): value is string {

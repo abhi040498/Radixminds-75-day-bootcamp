@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { ENROLMENT_DRAFT_KEY, loadEnrolmentDraft, loadEnrolmentRecovery, restoreEnrolmentStep, saveEnrolmentDraft, type StorageLike } from '../../src/lib/enrolmentRecovery.js'
+import { ENROLMENT_RECOVERY_KEY, loadEnrolmentRecovery, restoreEnrolmentStep, saveEnrolmentRecovery, type StorageLike } from '../../src/lib/enrolmentRecovery.js'
 
 function memoryStorage(): StorageLike & { values: Map<string, string> } {
   const values = new Map<string, string>()
@@ -9,77 +9,64 @@ function memoryStorage(): StorageLike & { values: Map<string, string> } {
 
 const makeIds = () => { let n = 0; return () => `00000000-0000-4000-8000-${String(++n).padStart(12, '0')}` }
 
-test('refresh restores program step, student-details step and review step without restoring personal data', () => {
+test('refresh starts an unsubmitted enrolment at program selection without restoring form progress', () => {
   const storage = memoryStorage()
-  const makeId = makeIds()
-  const first = loadEnrolmentDraft(storage, makeId).draft
-  first.step = 0
-  first.programCode = 'class-10'
-  saveEnrolmentDraft(storage, first)
-  assert.equal(restoreEnrolmentStep(loadEnrolmentDraft(storage, makeId).draft), 0)
-  first.step = 1
-  saveEnrolmentDraft(storage, first)
-  assert.equal(restoreEnrolmentStep(loadEnrolmentDraft(storage, makeId).draft), 1)
-  first.step = 2
-  saveEnrolmentDraft(storage, first)
-  const reviewRecovery = loadEnrolmentDraft(storage, makeId).draft
-  assert.equal(restoreEnrolmentStep(reviewRecovery), 1, 'review returns to details because personal fields are not stored')
+  const first = loadEnrolmentRecovery(storage, null, makeIds()).recovery
+  saveEnrolmentRecovery(storage, { ...first, programCode: 'class-10', subjectChoice: 'Biology', learningMode: 'hybrid', step: 2 })
+  const restored = loadEnrolmentRecovery(storage, null, makeIds()).recovery
+  assert.equal(restored.programCode, '')
+  assert.equal(restored.subjectChoice, '')
+  assert.equal(restored.learningMode, '')
+  assert.equal(restored.step, 0)
+  assert.equal(restoreEnrolmentStep(restored), 0)
 })
 
-test('refresh restores Class 12 pathway and learning mode selections', () => {
+test('student details and consent are never persisted or restored', () => {
   const storage = memoryStorage()
-  const draft = loadEnrolmentDraft(storage, makeIds()).draft
-  draft.programCode = 'class-12'
-  draft.subjectChoice = 'Biology'
-  draft.learningMode = 'hybrid'
-  saveEnrolmentDraft(storage, draft)
-  const restored = loadEnrolmentDraft(storage, makeIds()).draft
-  assert.equal(restored.programCode, 'class-12')
-  assert.equal(restored.subjectChoice, 'Biology')
-  assert.equal(restored.learningMode, 'hybrid')
+  const recovery = loadEnrolmentRecovery(storage, null, makeIds()).recovery
+  saveEnrolmentRecovery(storage, {
+    ...recovery,
+    fullName: 'Private Student', mobile: '9876543210', email: 'private@example.invalid',
+    policyAcknowledged: true, whatsappUpdatesConsent: true, statusToken: 'sensitive-token',
+  } as typeof recovery & Record<string, unknown>)
+  const serialized = storage.values.get(ENROLMENT_RECOVERY_KEY) ?? ''
+  for (const value of ['Private Student', '9876543210', 'private@example.invalid', 'sensitive-token', 'policyAcknowledged', 'whatsappUpdatesConsent']) {
+    assert.equal(serialized.includes(value), false)
+  }
+  const restored = loadEnrolmentRecovery(storage, null, makeIds()).recovery
+  assert.equal(restored.programCode, '')
+  assert.equal(restored.registrationIdempotencyKey, recovery.registrationIdempotencyKey)
+  assert.equal(restored.paymentIdempotencyKey, recovery.paymentIdempotencyKey)
 })
 
-test('storage allowlist excludes personal data, consent, tokens and secrets while preserving idempotency keys', () => {
+test('submission idempotency key survives refresh after an explicit pre-submit checkpoint', () => {
   const storage = memoryStorage()
-  const draft = loadEnrolmentDraft(storage, makeIds()).draft
-  saveEnrolmentDraft(storage, { ...draft, fullName: 'Private Student', mobile: '9876543210', email: 'private@example.invalid', statusToken: 'sensitive-token', policyAcknowledged: true })
-  const serialized = storage.values.get(ENROLMENT_DRAFT_KEY) ?? ''
-  assert.equal(serialized.includes('Private Student'), false)
-  assert.equal(serialized.includes('9876543210'), false)
-  assert.equal(serialized.includes('private@example.invalid'), false)
-  assert.equal(serialized.includes('sensitive-token'), false)
-  const restored = loadEnrolmentDraft(storage, makeIds()).draft
-  assert.equal(restored.registrationIdempotencyKey, draft.registrationIdempotencyKey)
-  assert.equal(restored.paymentIdempotencyKey, draft.paymentIdempotencyKey)
-})
-
-test('registration retry after an API timeout keeps the same idempotency key', () => {
-  const storage = memoryStorage()
-  const first = loadEnrolmentDraft(storage, makeIds()).draft
-  saveEnrolmentDraft(storage, first)
-  const retry = loadEnrolmentDraft(storage, makeIds()).draft
+  const first = loadEnrolmentRecovery(storage, null, makeIds()).recovery
+  saveEnrolmentRecovery(storage, first)
+  const retry = loadEnrolmentRecovery(storage, null, makeIds()).recovery
   assert.equal(retry.registrationIdempotencyKey, first.registrationIdempotencyKey)
 })
 
 test('submitted reference survives refresh without retaining a browser bearer token', () => {
   const storage = memoryStorage()
-  const draft = loadEnrolmentDraft(storage, makeIds()).draft
-  draft.enrolmentReference = 'RM-0123456789ABCDEF0123'
-  saveEnrolmentDraft(storage, { ...draft, statusToken: 'must-not-persist' })
-  const serialized = storage.values.get(ENROLMENT_DRAFT_KEY) ?? ''
+  const recovery = loadEnrolmentRecovery(storage, null, makeIds()).recovery
+  const submitted = { ...recovery, programCode: 'class-12' as const, enrolmentReference: 'RM-0123456789ABCDEF0123' }
+  saveEnrolmentRecovery(storage, { ...submitted, statusToken: 'must-not-persist' } as typeof submitted & Record<string, unknown>)
+  const serialized = storage.values.get(ENROLMENT_RECOVERY_KEY) ?? ''
   assert.equal(serialized.includes('must-not-persist'), false)
-  assert.equal(loadEnrolmentDraft(storage, makeIds()).draft.enrolmentReference, draft.enrolmentReference)
+  assert.equal(loadEnrolmentRecovery(storage, null, makeIds()).recovery.enrolmentReference, submitted.enrolmentReference)
 })
 
-test('legacy session recovery does not trust a stored reference or migrate its bearer token', () => {
+test('legacy session recovery keeps only a valid idempotency key and clears bearer-token storage', () => {
   const local = memoryStorage()
   const session = memoryStorage()
   session.setItem('radixminds:enrolment-session', JSON.stringify({ reference: 'RM-0123456789ABCDEF0123', programCode: 'class-12', token: 'private-token' }))
   session.setItem('radixminds:registration-idempotency-key', '00000000-0000-4000-8000-000000000123')
   const recovered = loadEnrolmentRecovery(local, session, makeIds())
-  assert.equal(recovered.draft.programCode, 'class-12')
-  assert.equal(recovered.draft.enrolmentReference, null)
-  assert.equal(recovered.draft.step, 1)
-  assert.equal(local.values.get(ENROLMENT_DRAFT_KEY)?.includes('private-token'), false)
+  assert.equal(recovered.recovery.programCode, '')
+  assert.equal(recovered.recovery.enrolmentReference, null)
+  assert.equal(recovered.recovery.step, 0)
+  assert.equal(recovered.recovery.registrationIdempotencyKey, '00000000-0000-4000-8000-000000000123')
+  assert.equal(local.values.get(ENROLMENT_RECOVERY_KEY)?.includes('private-token'), false)
   assert.equal(session.values.size, 0)
 })
