@@ -1,5 +1,5 @@
 import express, { type ErrorRequestHandler } from 'express'
-import { randomBytes, randomUUID } from 'node:crypto'
+import { randomUUID } from 'node:crypto'
 import cors from 'cors'
 import helmet from 'helmet'
 import rateLimit from 'express-rate-limit'
@@ -18,15 +18,18 @@ import { paymentOrderStore } from './paymentOrderStore.js'
 import { resolveEnrolmentProgramSelection, type EnrolmentProgram } from './enrolmentProgramSelection.js'
 import { buildWhatsAppConfirmationDraft, isWhatsAppConfirmationEligible } from './whatsappConfirmation.js'
 import { enrolmentSessionCookieName, isSameOriginCookieRequest, readCookieValue } from './enrolmentSession.js'
-import { enrolmentDraftPayloadSchema, publicDraft, restoreEnrolmentDraft, saveEnrolmentDraft } from './enrolmentDraft.js'
+import { restoreEnrolmentDraft } from './enrolmentDraft.js'
 import { enrolmentDraftStore } from './enrolmentDraftStore.js'
+import { clearEnrolmentDraftCookie, createEnrolmentDraftRouter, draftTokenFromRequest } from './enrolmentDraftRoutes.js'
 
 const app = express()
 app.disable('x-powered-by')
 app.use(helmet({ crossOriginEmbedderPolicy: false }))
 app.use(cors({ origin: config.APP_ORIGIN, credentials: true, methods: ['GET', 'POST', 'PATCH', 'OPTIONS'], allowedHeaders: ['Content-Type', 'Idempotency-Key'] }))
-app.use((req, res, next) => {
-  const requestId = req.get('x-request-id')?.slice(0, 80) || randomUUID()
+app.use((_req, res, next) => {
+  // Use a server-generated correlation ID; never echo potentially identifying
+  // client-supplied text into logs or error responses.
+  const requestId = randomUUID()
   res.setHeader('x-request-id', requestId)
   res.locals.requestId = requestId
   next()
@@ -36,23 +39,6 @@ const publicLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 30, standardH
 const checkoutLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 8, standardHeaders: 'draft-8', legacyHeaders: false })
 const adminLoginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 8, standardHeaders: 'draft-8', legacyHeaders: false })
 const draftLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 90, standardHeaders: 'draft-8', legacyHeaders: false })
-const DRAFT_COOKIE = 'rm_enrolment_draft'
-const DRAFT_COOKIE_PATH = '/api/v1'
-const DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000
-
-function draftCookieOptions() {
-  return { httpOnly: true, secure: new URL(config.APP_ORIGIN).protocol === 'https:', sameSite: 'strict' as const, path: DRAFT_COOKIE_PATH, maxAge: DRAFT_TTL_MS }
-}
-function clearDraftCookie(res: express.Response) {
-  const options = draftCookieOptions()
-  res.clearCookie(DRAFT_COOKIE, { httpOnly: options.httpOnly, secure: options.secure, sameSite: options.sameSite, path: options.path })
-}
-function draftTokenFromRequest(req: express.Request) {
-  const token = readCookie(req, DRAFT_COOKIE)
-  return /^[A-Za-z0-9_-]{43}$/.test(token) ? token : ''
-}
-function setNoStore(res: express.Response) { res.setHeader('Cache-Control', 'private, no-store') }
-
 type ApiErrorCode = 'CONFIGURATION_REQUIRED' | 'VALIDATION_ERROR' | 'NOT_FOUND' | 'PAYMENT_PENDING' | 'PAYMENT_FAILED' | 'PAYMENT_MISMATCH' | 'ALREADY_CONFIRMED'
 function fail(res: express.Response, status: number, code: ApiErrorCode | string, message: string, fields?: Record<string, string>) {
   return res.status(status).json({ error: { code, message, requestId: res.locals.requestId, ...(fields ? { fields } : {}) } })
@@ -152,95 +138,11 @@ app.get('/api/v1/programs', async (_req, res) => {
   return res.json({ programs })
 })
 
-const draftSessionSchema = z.object({ registrationIdempotencyKey: z.uuid(), paymentIdempotencyKey: z.uuid() }).strict()
-app.get('/api/v1/enrolment-draft', draftLimiter, async (req, res) => {
-  setNoStore(res)
-  if (!isSameOriginCookieRequest(req.get('origin'), req.get('sec-fetch-site'), config.APP_ORIGIN)) return fail(res, 403, 'ORIGIN_REJECTED', 'Request origin is not allowed.')
-  if (!hasDatabase) return databaseUnavailable(res)
-  const token = draftTokenFromRequest(req)
-  if (!token) {
-    if (readCookie(req, DRAFT_COOKIE)) clearDraftCookie(res)
-    return res.json({ draft: null })
-  }
-  try {
-    const record = await restoreEnrolmentDraft(enrolmentDraftStore, sha256(token))
-    if (!record) {
-      clearDraftCookie(res)
-      return res.json({ draft: null, expired: true })
-    }
-    return res.json(publicDraft(record))
-  } catch {
-    return fail(res, 503, 'DRAFT_UNAVAILABLE', 'Saved enrolment details could not be loaded. Please retry; your current form remains available.')
-  }
-})
-
-app.post('/api/v1/enrolment-draft/session', draftLimiter, csrfOriginGuard, async (req, res) => {
-  setNoStore(res)
-  if (!hasDatabase) return databaseUnavailable(res)
-  const parsed = draftSessionSchema.safeParse(req.body)
-  if (!parsed.success) return fail(res, 422, 'VALIDATION_ERROR', 'The draft session request is invalid.')
-  const existingToken = draftTokenFromRequest(req)
-  const now = new Date()
-  try {
-    if (existingToken) {
-      const existing = await restoreEnrolmentDraft(enrolmentDraftStore, sha256(existingToken), now)
-      if (existing) return res.json(publicDraft(existing))
-      await enrolmentDraftStore.delete(sha256(existingToken))
-      clearDraftCookie(res)
-    }
-    const token = randomBytes(32).toString('base64url')
-    const expiresAt = new Date(now.getTime() + DRAFT_TTL_MS)
-    const record = await enrolmentDraftStore.create({
-      sessionTokenHash: sha256(token),
-      registrationIdempotencyKey: parsed.data.registrationIdempotencyKey,
-      paymentIdempotencyKey: parsed.data.paymentIdempotencyKey,
-      now: now.toISOString(),
-      expiresAt: expiresAt.toISOString(),
-    })
-    res.cookie(DRAFT_COOKIE, token, draftCookieOptions())
-    return res.status(201).json(publicDraft(record))
-  } catch {
-    return fail(res, 503, 'DRAFT_UNAVAILABLE', 'A secure draft session could not be started. Your form data remains on this page; retry saving.')
-  }
-})
-
-app.put('/api/v1/enrolment-draft', draftLimiter, csrfOriginGuard, async (req, res) => {
-  setNoStore(res)
-  if (!hasDatabase) return databaseUnavailable(res)
-  const token = draftTokenFromRequest(req)
-  if (!token) return fail(res, 401, 'DRAFT_SESSION_REQUIRED', 'Start a secure draft session before saving details.')
-  const revision = z.number().int().nonnegative().safeParse(req.body?.expectedRevision)
-  const payload = enrolmentDraftPayloadSchema.safeParse(req.body?.draft)
-  if (!revision.success || !payload.success) return fail(res, 422, 'VALIDATION_ERROR', 'Check the saved enrolment details and try again.')
-  try {
-    const result = await saveEnrolmentDraft(enrolmentDraftStore, { sessionTokenHash: sha256(token), expectedRevision: revision.data, payload: payload.data })
-    if (!result.ok && result.reason === 'invalid') return fail(res, 422, 'VALIDATION_ERROR', 'Check the saved enrolment details and try again.')
-    if (!result.ok) {
-      const current = await enrolmentDraftStore.find(sha256(token))
-      if (!current || Date.parse(current.expires_at) <= Date.now()) {
-        clearDraftCookie(res)
-        return fail(res, 410, 'DRAFT_EXPIRED', 'This saved draft expired. Your current details remain on this page; save again to start a new secure draft.')
-      }
-      return fail(res, 409, 'DRAFT_REVISION_CONFLICT', 'This draft changed in another tab. Reload the saved details before saving again.')
-    }
-    // Keep browser and database expiry aligned with the seven-day inactivity TTL.
-    res.cookie(DRAFT_COOKIE, token, draftCookieOptions())
-    return res.json(publicDraft(result.record))
-  } catch {
-    return fail(res, 503, 'DRAFT_SAVE_FAILED', 'Your details are still on this page but could not be saved. Retry the save before leaving.')
-  }
-})
-
-app.delete('/api/v1/enrolment-draft', draftLimiter, csrfOriginGuard, async (req, res) => {
-  setNoStore(res)
-  const token = draftTokenFromRequest(req)
-  if (token && hasDatabase) {
-    try { await enrolmentDraftStore.delete(sha256(token)) }
-    catch { return fail(res, 503, 'DRAFT_DELETE_FAILED', 'The saved draft could not be invalidated. Please retry.') }
-  }
-  clearDraftCookie(res)
-  return res.status(204).end()
-})
+app.use('/api/v1/enrolment-draft', draftLimiter, createEnrolmentDraftRouter({
+  store: enrolmentDraftStore,
+  appOrigin: config.APP_ORIGIN,
+  databaseConfigured: hasDatabase,
+}))
 
 app.post('/api/v1/enrolments', publicLimiter, csrfOriginGuard, async (req, res) => {
   if (!hasDatabase) return databaseUnavailable(res)
@@ -319,7 +221,7 @@ app.post('/api/v1/enrolments', publicLimiter, csrfOriginGuard, async (req, res) 
   if (draftToken) {
     try { await enrolmentDraftStore.delete(sha256(draftToken), idempotencyKey) }
     catch { /* The cookie is revoked below; any private orphan expires automatically within seven days. */ }
-    clearDraftCookie(res)
+    clearEnrolmentDraftCookie(res, config.APP_ORIGIN)
   }
   const enrolmentCookie = enrolmentSessionCookieName(created.public_reference)
   if (!enrolmentCookie) return fail(res, 503, 'REGISTRATION_REFERENCE_INVALID', 'The saved registration reference could not be confirmed. Contact Radix Minds before submitting again.')
@@ -843,9 +745,24 @@ app.patch('/api/v1/admin/enquiries/:id', requireAdmin, csrfOriginGuard, async (r
   return res.json({updated:true})
 })
 
-const errorHandler: ErrorRequestHandler = (error, _req, res, _next) => {
-  console.error('api_error', { requestId: res.locals.requestId, name: error instanceof Error ? error.name : 'unknown' })
-  return fail(res, 500, 'INTERNAL_ERROR', 'Something went wrong. Please try again or contact the team.')
+const errorHandler: ErrorRequestHandler = (error, req, res, _next) => {
+  const safeError = error && typeof error === 'object' ? error as { name?: unknown; code?: unknown; status?: unknown } : {}
+  const rawCode = safeError.code === 'entity.too.large' || safeError.code === 'entity.parse.failed'
+    ? safeError.code
+    : typeof safeError.code === 'string' && /^[A-Za-z0-9_-]{1,40}$/.test(safeError.code) ? safeError.code : undefined
+  const rawStatus = typeof safeError.status === 'number' && Number.isInteger(safeError.status) && safeError.status >= 400 && safeError.status <= 599 ? safeError.status : undefined
+  const isDraftRoute = req.path === '/api/v1/enrolment-draft' || req.path === '/api/v1/enrolment-draft/session'
+  console.error('api_error', {
+    requestId: res.locals.requestId,
+    route: isDraftRoute ? req.path.replace('/api/v1/enrolment-draft', 'enrolment-draft') : 'other',
+    method: req.method,
+    name: typeof safeError.name === 'string' && /^[A-Za-z][A-Za-z0-9]*Error$/.test(safeError.name) ? safeError.name : 'unknown',
+    errorCode: rawCode,
+    httpStatus: rawStatus ?? 500,
+  })
+  if (rawCode === 'entity.too.large') return fail(res, 413, 'REQUEST_TOO_LARGE', 'The request is too large. Please shorten the saved details and retry.')
+  if (rawCode === 'entity.parse.failed') return fail(res, 400, 'INVALID_JSON', 'The request could not be read. Please retry.')
+  return fail(res, rawStatus ?? 500, 'INTERNAL_ERROR', 'Something went wrong. Please try again or contact the team.')
 }
 
 // API fallthrough and error handling are attached by each runtime entry point.
