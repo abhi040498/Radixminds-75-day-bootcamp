@@ -15,6 +15,25 @@ export type StorageLike = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const referencePattern = /^RM-[A-F0-9]{20}$/
 
+export type EnrolmentEntry =
+  | { kind: 'confirmation' }
+  | { kind: 'resume'; reference: string }
+  | { kind: 'new'; programCode: 'class-10' | 'class-12' | '' }
+
+/** A confirmation URL or explicit resume wins; a fresh route never inherits a submitted reference. */
+export function resolveEnrolmentEntry(pathname: string, requestedProgram: string | null, storedReference: string | null, explicitResume = false): EnrolmentEntry {
+  if (pathname === '/enrol/confirmation') return { kind: 'confirmation' }
+  const validReference = typeof storedReference === 'string' && referencePattern.test(storedReference) ? storedReference : null
+  if (explicitResume && validReference) return { kind: 'resume', reference: validReference }
+  if (requestedProgram === 'class-10' || requestedProgram === 'class-12') return { kind: 'new', programCode: requestedProgram }
+  return { kind: 'new', programCode: '' }
+}
+
+export function resolveConfirmationReference(requestedReference: string | null, storedReference: string | null): string | null {
+  const candidate = requestedReference ?? storedReference
+  return typeof candidate === 'string' && referencePattern.test(candidate) ? candidate : null
+}
+
 function randomUuid() {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID()
   const bytes = new Uint8Array(16)
@@ -30,6 +49,13 @@ export function createEnrolmentRecovery(makeId = randomUuid): EnrolmentRecovery 
     programCode: '', subjectChoice: '', learningMode: '', step: 0,
     registrationIdempotencyKey: makeId(), paymentIdempotencyKey: makeId(), enrolmentReference: null,
   }
+}
+
+/** Start a fresh programme journey without touching the existing server enrolment or its cookies. */
+export function startFreshEnrolmentRecovery(storage: StorageLike | null, programCode: 'class-10' | 'class-12', makeId = randomUuid): EnrolmentRecovery {
+  const recovery = { ...createEnrolmentRecovery(makeId), programCode }
+  saveEnrolmentRecovery(storage, recovery)
+  return recovery
 }
 
 function normalizeRecovery(value: unknown, makeId: () => string): EnrolmentRecovery | null {

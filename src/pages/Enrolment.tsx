@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, ArrowRight, BadgeCheck, Check, CircleAlert, Clock3, CreditCard, GraduationCap, LockKeyhole, MessageCircle, ShieldCheck } from 'lucide-react'
 import { bootcampDates, deliveryOptions, type LearningMode, type ProgramCode } from '../data/bootcampSchedule'
 import { api, formatINR, type ApiError, type PublicProgram } from '../lib/enrolmentApi'
 import { visibleEnrolmentReference } from '../lib/enrolmentConfirmation'
-import { isEnrolmentReference, loadEnrolmentRecovery, restoreEnrolmentStep, saveEnrolmentRecovery, type StorageLike } from '../lib/enrolmentRecovery'
+import { isEnrolmentReference, loadEnrolmentRecovery, resolveConfirmationReference, resolveEnrolmentEntry, restoreEnrolmentStep, saveEnrolmentRecovery, startFreshEnrolmentRecovery, type StorageLike } from '../lib/enrolmentRecovery'
 import { canStartPayment, resolveCheckoutOutcome, type CheckoutEvent, type CheckoutStatusResult, type PaymentOutcome, type PaymentAttemptSnapshot } from '../lib/paymentCheckoutRecovery'
 import { useProgramCatalog } from '../lib/useProgramCatalog'
 import { policyVersions } from '../data/policyVersions'
@@ -17,7 +17,7 @@ type FormState = {
   policyAcknowledged: boolean
   whatsappUpdatesConsent: boolean
 }
-type EnrolmentSession = { reference: string; programCode: ProgramCode }
+type EnrolmentSession = { reference: string; programCode?: ProgramCode }
 type CheckoutOrder = { enrolmentReference: string; orderId: string; keyId: string; amount: number; currency: string; name: string; description: string }
 type CheckoutResult = { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }
 type WindowWithRazorpay = Window & { Razorpay?: new (options: Record<string, unknown>) => { open: () => void; on: (event: string, handler: (event: { error?: { description?: string } }) => void) => void } }
@@ -98,9 +98,20 @@ function moneySummary(program: PublicProgram) {
 }
 
 export function EnrolmentPage() {
+  const location = useLocation()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const [initialRecovery] = useState(() => loadEnrolmentRecovery(browserStorage('localStorage'), browserStorage('sessionStorage')))
+  const requestedProgramAtEntry = searchParams.get('program')
+  const explicitResumeAtEntry = searchParams.get('resume') === '1'
+  const [initialRecovery] = useState(() => {
+    const loaded = loadEnrolmentRecovery(browserStorage('localStorage'), browserStorage('sessionStorage'))
+    const entry = resolveEnrolmentEntry(location.pathname, requestedProgramAtEntry, loaded.recovery.enrolmentReference, explicitResumeAtEntry)
+    if (entry.kind === 'new' && entry.programCode) {
+      const recovery = startFreshEnrolmentRecovery(browserStorage('localStorage'), entry.programCode)
+      return { recovery, recovered: false }
+    }
+    return loaded
+  })
   const [recovery, setRecovery] = useState(initialRecovery.recovery)
   const [step, setStep] = useState(() => restoreEnrolmentStep(initialRecovery.recovery))
   const [form, setForm] = useState<FormState>(() => ({ ...initialForm, programCode: initialRecovery.recovery.programCode, subjectChoice: initialRecovery.recovery.subjectChoice, learningMode: initialRecovery.recovery.learningMode }))
@@ -115,7 +126,7 @@ export function EnrolmentPage() {
   const [paymentOutcome, setPaymentOutcome] = useState<PaymentOutcome>('pending')
   const [paymentAttempt, setPaymentAttempt] = useState<PaymentAttemptSnapshot | null>(null)
   const [savedSession, setSavedSession] = useState<EnrolmentSession | null>(() => initialRecovery.recovery.enrolmentReference && initialRecovery.recovery.programCode ? { reference: initialRecovery.recovery.enrolmentReference, programCode: initialRecovery.recovery.programCode } : null)
-  const [resumeSubmittedEnrollment] = useState(Boolean(initialRecovery.recovery.enrolmentReference))
+  const [resumeSubmittedEnrollment] = useState(() => resolveEnrolmentEntry(location.pathname, requestedProgramAtEntry, initialRecovery.recovery.enrolmentReference, explicitResumeAtEntry).kind === 'resume')
 
   useEffect(() => {
     if (resumeSubmittedEnrollment) navigate('/enrol/confirmation', { replace: true })
@@ -316,6 +327,7 @@ type ConfirmationResponse = {
 }
 
 export function EnrolmentConfirmationPage() {
+  const [searchParams] = useSearchParams()
   const [status, setStatus] = useState<ConfirmationResponse | null>(null)
   const [error, setError] = useState('')
   const [checking, setChecking] = useState(true)
@@ -326,6 +338,8 @@ export function EnrolmentConfirmationPage() {
   const [checkoutBusy,setCheckoutBusy]=useState(false)
   const [checkoutMessage,setCheckoutMessage]=useState('')
   const [submittedRecovery,setSubmittedRecovery]=useState(()=>loadEnrolmentRecovery(browserStorage('localStorage'),browserStorage('sessionStorage')).recovery)
+  const referenceFromUrl = searchParams.get('reference')
+  const referenceForRecovery = resolveConfirmationReference(referenceFromUrl, submittedRecovery.enrolmentReference)
   const displayReference = visibleEnrolmentReference(status?.enrolmentReference, sessionInfo?.reference)
   const refreshStatus=async(session:EnrolmentSession)=>{const result=await api<ConfirmationResponse>(`/enrolments/${session.reference}/status`);setStatus(result);if(result.status==='failed')setSubmittedRecovery(current=>{const next={...current,paymentIdempotencyKey:makeIdempotencyKey()};saveEnrolmentRecovery(browserStorage('localStorage'),next);return next});return result}
   const submitRefundRequest=async()=>{
@@ -372,8 +386,7 @@ export function EnrolmentConfirmationPage() {
     finally{setCheckoutBusy(false)}
   }
   useEffect(() => {
-    const knownReference=submittedRecovery.enrolmentReference
-    const knownSession=knownReference&&submittedRecovery.programCode?{reference:knownReference,programCode:submittedRecovery.programCode as ProgramCode}:null
+    const knownSession=referenceForRecovery?{reference:referenceForRecovery, ...(submittedRecovery.enrolmentReference === referenceForRecovery && submittedRecovery.programCode ? {programCode:submittedRecovery.programCode as ProgramCode} : {})}:null
     if(knownSession)setSessionInfo(knownSession)
     let active = true
     const check = async () => {

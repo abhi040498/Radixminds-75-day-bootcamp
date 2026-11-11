@@ -84,6 +84,16 @@ test('created order with no provider payment id remains reusable after checkout 
     'the retry must reopen Checkout using the existing server-side order and same idempotency key')
 })
 
+test('refresh recovery keeps an existing pending payment available for explicit retry', async () => {
+  const result = await resolveCheckoutOutcome(
+    'dismissed',
+    async () => ({ status: 'pending' }),
+    async () => ({ status: 'pending', payment: { status: 'created', reference: null } }),
+  )
+  assert.equal(result.status, 'pending')
+  assert.equal(canStartPayment(result.status, result.payment), true)
+})
+
 test('an unresolved provider payment remains locked after reconciliation', async () => {
   const result = await resolveCheckoutOutcome(
     'payment.failed',
