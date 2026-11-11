@@ -202,6 +202,96 @@ test('enrolment submission fails closed before database access when the status-t
   }
 })
 
+test('enrolment RPC errors log only sanitized diagnostics and preserve the safe 503 response', () => {
+  const directory = mkdtempSync(join(os.tmpdir(), 'radixminds-enrolment-rpc-log-test-'))
+  try {
+    const functionUrl = pathToFileURL(resolve('netlify/functions/api.ts')).href
+    const source = `
+      let diagnostic = null;
+      let fetchCalls = 0;
+      console.error = (event, fields) => { if (event === 'api_enrolment_rpc_error') diagnostic = fields; };
+      globalThis.fetch = async (input) => {
+        fetchCalls++;
+        const url = new URL(typeof input === 'string' ? input : input.url);
+        if (url.pathname === '/rest/v1/programs') return Response.json([{
+          id: '00000000-0000-4000-8000-000000000010', code: 'class-10', name: 'Synthetic Class 10',
+          duration_days: 75, subjects: ['Mathematics','Science','Social Science','English'],
+          program_fee_paise: 249900, standard_fee_paise: null, discount_percent: null,
+          offer_valid_until: null, currency: 'INR', is_active: true, enrolment_open: true,
+          program_learning_modes: [{ mode: 'online', label: 'Online', is_available: true, batch_label: null }]
+        }]);
+        if (url.pathname === '/rest/v1/rpc/create_pending_enrolment') return Response.json({
+          code: 'P0001 CODE_CANARY', name: 'PostgrestError', message: 'SUPABASE_MESSAGE_CANARY',
+          details: 'SUPABASE_DETAILS_CANARY', hint: 'SUPABASE_HINT_CANARY',
+          query: 'SELECT_SQL_CANARY', token: 'TOKEN_CANARY'
+        }, { status: 400 });
+        throw new Error('Unexpected synthetic fetch path');
+      };
+      const { handler } = await import(${JSON.stringify(functionUrl)});
+      const response = await handler({
+        httpMethod: 'POST', path: '/api/v1/enrolments',
+        headers: {
+          origin: 'https://example-test-project.netlify.app',
+          'sec-fetch-site': 'same-origin', 'content-type': 'application/json',
+          'idempotency-key': '00000000-0000-4000-8000-000000000099'
+        },
+        body: JSON.stringify({
+          programCode: 'class-10', fullName: 'STUDENT_DATA_CANARY', mobile: '9876543210',
+          email: 'EMAIL_DATA_CANARY@example.invalid', dateOfBirth: '', board: 'CBSE', schoolName: 'SCHOOL_DATA_CANARY',
+          preferredLanguage: 'English', subjectChoice: null, learningMode: 'online',
+          whatsappUpdatesConsent: false, whatsappMobile: '', policyAcknowledged: true,
+          policyVersions: { terms: '2026-11-10', privacy: '2026-11-10', refund: '2026-11-10' }
+        }),
+        isBase64Encoded: false, requestContext: { identity: { sourceIp: '127.0.0.1' } }
+      }, {});
+      console.log(JSON.stringify({ statusCode: response.statusCode, body: response.body, diagnostic, fetchCalls }));
+    `
+    const result = spawnSync(process.execPath, ['--import', 'tsx', '--input-type=module', '-e', source], {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+      env: {
+        PATH: process.env.PATH,
+        SystemRoot: process.env.SystemRoot,
+        TEMP: process.env.TEMP,
+        TMP: process.env.TMP,
+        DOTENV_CONFIG_PATH: join(directory, 'does-not-exist'),
+        NODE_ENV: 'test',
+        APP_ORIGIN: 'https://example-test-project.netlify.app',
+        SUPABASE_URL: 'http://127.0.0.1:54321',
+        SUPABASE_SECRET_KEY: 'synthetic-database-secret-fixture',
+        RAZORPAY_KEY_ID: 'rzp_test_syntheticfixture',
+        RAZORPAY_KEY_SECRET: 'synthetic-razorpay-secret-fixture',
+        RAZORPAY_WEBHOOK_SECRET: 'synthetic-webhook-secret-fixture-long-enough',
+        STATUS_TOKEN_SECRET: 'synthetic-status-token-secret-fixture-long-enough',
+        PAYMENT_ENABLED: 'true',
+        POLICIES_APPROVED: 'true',
+        RAZORPAY_MODE: 'test',
+      },
+    })
+    assert.equal(result.status, 0, 'the isolated function request should complete')
+    const combinedLogs = `${result.stdout}${result.stderr}`
+    const output = result.stdout.trim().split(/\r?\n/).at(-1)
+    const resultJson = JSON.parse(output)
+    const body = JSON.parse(resultJson.body)
+    assert.equal(resultJson.statusCode, 503)
+    assert.equal(body.error.code, 'REGISTRATION_SAVE_FAILED')
+    assert.equal(resultJson.fetchCalls, 2, 'the test should reach the mocked program read and enrolment RPC only')
+    assert.deepEqual(Object.keys(resultJson.diagnostic).sort(), ['httpStatus', 'operation', 'requestId', 'supabaseErrorCode', 'supabaseErrorName'].sort())
+    assert.match(resultJson.diagnostic.requestId, /^[0-9a-f-]{36}$/i)
+    assert.equal(resultJson.diagnostic.operation, 'create_pending_enrolment')
+    assert.equal(resultJson.diagnostic.supabaseErrorCode, 'unknown', 'malformed provider codes must be sanitized')
+    assert.match(resultJson.diagnostic.supabaseErrorName, /^(?:[A-Za-z][A-Za-z0-9]{0,39}|unknown)$/)
+    assert.equal(resultJson.diagnostic.httpStatus, 503)
+    assert.equal(body.error.requestId, resultJson.diagnostic.requestId)
+    for (const canary of [
+      'SUPABASE_MESSAGE_CANARY', 'SUPABASE_DETAILS_CANARY', 'SUPABASE_HINT_CANARY',
+      'SELECT_SQL_CANARY', 'TOKEN_CANARY', 'CODE_CANARY', 'STUDENT_DATA_CANARY', 'EMAIL_DATA_CANARY', 'SCHOOL_DATA_CANARY',
+    ]) assert.equal(combinedLogs.includes(canary), false, `${canary} must not be logged or returned`)
+  } finally {
+    rmSync(directory, { recursive: true, force: true })
+  }
+})
+
 test('function startup diagnostic reports only presence, length and threshold result', () => {
   const secretFixture = 'synthetic-private-value-not-for-logs'
   const result = inspectConfiguration(secretFixture, true)

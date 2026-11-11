@@ -221,6 +221,22 @@ app.post('/api/v1/enrolments', publicLimiter, csrfOriginGuard, async (req, res) 
     status_token_hash: sha256(statusToken),
   }
   const { data: result, error } = await db.rpc('create_pending_enrolment', { p_input: rpcInput })
+  if (error) {
+    const safeError = error as { code?: unknown; name?: unknown }
+    const safeCode = typeof safeError.code === 'string' && /^[A-Za-z0-9_-]{1,40}$/.test(safeError.code)
+      ? safeError.code
+      : 'unknown'
+    const safeName = typeof safeError.name === 'string' && /^[A-Za-z][A-Za-z0-9]{0,39}$/.test(safeError.name)
+      ? safeError.name
+      : 'unknown'
+    console.error('api_enrolment_rpc_error', {
+      requestId: res.locals.requestId,
+      operation: 'create_pending_enrolment',
+      supabaseErrorCode: safeCode,
+      supabaseErrorName: safeName,
+      httpStatus: 503,
+    })
+  }
   const created = Array.isArray(result) ? result[0] : result
   if (error || !created?.enrolment_id || !created.public_reference) return fail(res, 503, 'REGISTRATION_SAVE_FAILED', 'We could not save your registration just now. Please try again or contact the team.')
   const enrolmentCookie = enrolmentSessionCookieName(created.public_reference)
@@ -753,7 +769,7 @@ const errorHandler: ErrorRequestHandler = (error, req, res, _next) => {
   const rawStatus = typeof safeError.status === 'number' && Number.isInteger(safeError.status) && safeError.status >= 400 && safeError.status <= 599 ? safeError.status : undefined
   console.error('api_error', {
     requestId: res.locals.requestId,
-    route: req.path.startsWith('/api/v1/enrolments/') ? 'enrolment' : 'other',
+    route: req.path === '/api/v1/enrolments' || req.path.startsWith('/api/v1/enrolments/') ? 'enrolment' : 'other',
     method: req.method,
     name: typeof safeError.name === 'string' && /^[A-Za-z][A-Za-z0-9]*Error$/.test(safeError.name) ? safeError.name : 'unknown',
     errorCode: rawCode,
