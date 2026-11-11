@@ -17,11 +17,12 @@ import { createPaymentOrder, PaymentOrderError } from './paymentOrderCoordinator
 import { paymentOrderStore } from './paymentOrderStore.js'
 import { resolveEnrolmentProgramSelection, type EnrolmentProgram } from './enrolmentProgramSelection.js'
 import { buildWhatsAppConfirmationDraft, isWhatsAppConfirmationEligible } from './whatsappConfirmation.js'
+import { enrolmentSessionCookieName, isSameOriginCookieRequest, readCookieValue } from './enrolmentSession.js'
 
 const app = express()
 app.disable('x-powered-by')
 app.use(helmet({ crossOriginEmbedderPolicy: false }))
-app.use(cors({ origin: config.APP_ORIGIN, credentials: true, methods: ['GET', 'POST', 'PATCH', 'OPTIONS'], allowedHeaders: ['Content-Type', 'Idempotency-Key', 'X-Enrolment-Token'] }))
+app.use(cors({ origin: config.APP_ORIGIN, credentials: true, methods: ['GET', 'POST', 'PATCH', 'OPTIONS'], allowedHeaders: ['Content-Type', 'Idempotency-Key'] }))
 app.use((req, res, next) => {
   const requestId = req.get('x-request-id')?.slice(0, 80) || randomUUID()
   res.setHeader('x-request-id', requestId)
@@ -196,8 +197,14 @@ app.post('/api/v1/enrolments', publicLimiter, csrfOriginGuard, async (req, res) 
   const { data: result, error } = await db.rpc('create_pending_enrolment', { p_input: rpcInput })
   const created = Array.isArray(result) ? result[0] : result
   if (error || !created?.enrolment_id || !created.public_reference) return fail(res, 503, 'REGISTRATION_SAVE_FAILED', 'We could not save your registration just now. Please try again or contact the team.')
+  const enrolmentCookie = enrolmentSessionCookieName(created.public_reference)
+  if (!enrolmentCookie) return fail(res, 503, 'REGISTRATION_REFERENCE_INVALID', 'The saved registration reference could not be confirmed. Contact Radix Minds before submitting again.')
+  const secureCookie = new URL(config.APP_ORIGIN).protocol === 'https:'
+  const cookieOptions = { httpOnly: true, secure: secureCookie, sameSite: 'strict' as const, path: '/api/v1', maxAge: 60 * 24 * 60 * 60 * 1000 }
+  res.cookie(enrolmentCookie, statusToken, cookieOptions)
+  res.cookie('rm_last_enrolment', created.public_reference, cookieOptions)
   const checkoutReady = checkoutBaseReady && validateRazorpayKeyMode()
-  return res.status(201).json({ enrolmentReference: created.public_reference, statusToken, status: 'pending_payment', paymentStatus: 'pending', checkoutReady, message: checkoutReady ? 'Your details are saved. Continue to secure payment.' : 'Your enrolment request is saved. Payment is pending; the team will share the next step.' })
+  return res.status(201).json({ enrolmentReference: created.public_reference, status: 'pending_payment', paymentStatus: 'pending', checkoutReady, message: checkoutReady ? 'Your details are saved. Continue to secure payment.' : 'Your enrolment request is saved. Payment is pending; the team will share the next step.' })
 })
 
 function getEnrollmentByToken(reference: string, token: string) {
@@ -205,6 +212,11 @@ function getEnrollmentByToken(reference: string, token: string) {
     if (error || !data || new Date(data.status_token_expires_at).getTime() < Date.now() || !safeHexEqual(sha256(token), data.status_token_hash.trim())) return null
     return data
   })
+}
+
+function enrollmentTokenFromRequest(req: express.Request, reference: string) {
+  const cookieName = enrolmentSessionCookieName(reference)
+  return cookieName ? readCookie(req, cookieName) : ''
 }
 
 function withCheckoutOrder(payment: { id: string; status: string; provider_order_id: string | null; amount_paise: number; currency: string }, reference: string) {
@@ -216,7 +228,7 @@ function withCheckoutOrder(payment: { id: string; status: string; provider_order
 app.post('/api/v1/enrolments/:reference/payment-orders', checkoutLimiter, csrfOriginGuard, async (req, res) => {
   if (!hasDatabase) return databaseUnavailable(res)
   if (!checkoutBaseReady || !validateRazorpayKeyMode()) return fail(res, 503, 'PAYMENT_NOT_CONFIGURED', 'Secure online payment is not configured yet. Please contact Radix Minds.')
-  const token = req.get('x-enrolment-token') ?? ''
+  const token = enrollmentTokenFromRequest(req, String(req.params.reference ?? ''))
   const enrollment = await getEnrollmentByToken(String(req.params.reference ?? ''), token)
   if (!enrollment) return fail(res, 404, 'ENROLMENT_NOT_FOUND', 'This registration could not be found. Return to the enrolment form or contact the team.')
   if (enrollment.status === 'confirmed') return fail(res, 409, 'ALREADY_CONFIRMED', 'This enrolment is already confirmed.')
@@ -250,7 +262,7 @@ app.post('/api/v1/payments/verify', checkoutLimiter, csrfOriginGuard, async (req
   if (!hasDatabase || !checkoutBaseReady) return fail(res, 503, 'PAYMENT_NOT_CONFIGURED', 'Payment verification is not available yet. Please contact the team.')
   const parsed = verifySchema.safeParse(req.body)
   if (!parsed.success) return fail(res, 422, 'VALIDATION_ERROR', 'Payment details could not be verified.')
-  const token = req.get('x-enrolment-token') ?? ''
+  const token = enrollmentTokenFromRequest(req, parsed.data.enrolmentReference)
   const enrollment = await getEnrollmentByToken(parsed.data.enrolmentReference, token)
   if (!enrollment) return fail(res, 404, 'ENROLMENT_NOT_FOUND', 'Registration could not be found.')
   const db = getDatabase()
@@ -290,10 +302,11 @@ app.post('/api/v1/payments/verify', checkoutLimiter, csrfOriginGuard, async (req
   }
 })
 
-app.get('/api/v1/enrolments/:reference/status', publicLimiter, async (req, res) => {
+async function sendEnrolmentStatus(reference: string, token: string, res: express.Response) {
   if (!hasDatabase) return databaseUnavailable(res)
-  const enrollment = await getEnrollmentByToken(String(req.params.reference ?? ''), req.get('x-enrolment-token') ?? '')
+  const enrollment = await getEnrollmentByToken(reference, token)
   if (!enrollment) return fail(res, 404, 'ENROLMENT_NOT_FOUND', 'This confirmation link is invalid or expired.')
+  res.setHeader('Cache-Control', 'private, no-store')
   const db = getDatabase()
   const { data: student } = await db.from('students').select('full_name').eq('id', enrollment.student_id).maybeSingle()
   const { data: payment } = await db.from('payments').select('provider_order_id,provider_payment_id,amount_paise,currency,status,captured_at').eq('enrolment_id', enrollment.id).order('attempt_number', { ascending: false }).limit(1).maybeSingle()
@@ -322,7 +335,22 @@ app.get('/api/v1/enrolments/:reference/status', publicLimiter, async (req, res) 
   const { data: finalPayment } = await db.from('payments').select('provider_payment_id,amount_paise,currency,status,captured_at').eq('enrolment_id', enrollment.id).order('attempt_number', { ascending: false }).limit(1).maybeSingle()
   const { data: refundRequest } = await db.from('refund_requests').select('request_reference,status,requested_at,cutoff_at,decision,decided_at,approved_amount_paise,provider_status').eq('enrolment_id', enrollment.id).maybeSingle()
   const status = finalEnrollment?.status === 'confirmed' ? 'confirmed' : finalPayment?.status === 'failed' ? 'failed' : finalPayment?.status === 'needs_review' || finalEnrollment?.status === 'needs_review' ? 'needs_review' : 'pending'
-  return res.json({ status, enrolmentReference: enrollment.public_reference, studentName: student?.full_name ?? '', program: enrollment.program_snapshot, subjects: enrollment.subjects_snapshot, price: enrollment.pricing_snapshot, payment: finalPayment ? { reference: finalPayment.provider_payment_id, amountPaise: finalPayment.amount_paise, currency: finalPayment.currency, status: finalPayment.status, capturedAt: finalPayment.captured_at } : null, refundRequest: refundRequest ? { reference: refundRequest.request_reference, status: refundRequest.status, requestedAt: refundRequest.requested_at, cutoffAt: refundRequest.cutoff_at, decision: refundRequest.decision, decidedAt: refundRequest.decided_at, approvedAmountPaise: refundRequest.approved_amount_paise, providerStatus: refundRequest.provider_status } : null, support: { whatsappPhone: config.WHATSAPP_PHONE, telegramUrl: config.TELEGRAM_URL } })
+  const checkoutReady = (status === 'pending' || status === 'failed') && enrollment.status === 'pending_payment' && checkoutBaseReady && validateRazorpayKeyMode()
+  return res.json({ status, checkoutReady, enrolmentReference: enrollment.public_reference, studentName: student?.full_name ?? '', program: enrollment.program_snapshot, subjects: enrollment.subjects_snapshot, price: enrollment.pricing_snapshot, payment: finalPayment ? { reference: finalPayment.provider_payment_id, amountPaise: finalPayment.amount_paise, currency: finalPayment.currency, status: finalPayment.status, capturedAt: finalPayment.captured_at } : null, refundRequest: refundRequest ? { reference: refundRequest.request_reference, status: refundRequest.status, requestedAt: refundRequest.requested_at, cutoffAt: refundRequest.cutoff_at, decision: refundRequest.decision, decidedAt: refundRequest.decided_at, approvedAmountPaise: refundRequest.approved_amount_paise, providerStatus: refundRequest.provider_status } : null, support: { whatsappPhone: config.WHATSAPP_PHONE, telegramUrl: config.TELEGRAM_URL } })
+}
+
+app.get('/api/v1/enrolments/recover', publicLimiter, async (req, res) => {
+  if (!isSameOriginCookieRequest(req.get('origin'), req.get('sec-fetch-site'), config.APP_ORIGIN)) return fail(res, 403, 'ORIGIN_REJECTED', 'Request origin is not allowed.')
+  if (!hasDatabase) return databaseUnavailable(res)
+  const reference = readCookie(req, 'rm_last_enrolment')
+  const token = enrollmentTokenFromRequest(req, reference)
+  return sendEnrolmentStatus(reference, token, res)
+})
+
+app.get('/api/v1/enrolments/:reference/status', publicLimiter, async (req, res) => {
+  if (!isSameOriginCookieRequest(req.get('origin'), req.get('sec-fetch-site'), config.APP_ORIGIN)) return fail(res, 403, 'ORIGIN_REJECTED', 'Request origin is not allowed.')
+  const reference = String(req.params.reference ?? '')
+  return sendEnrolmentStatus(reference, enrollmentTokenFromRequest(req, reference), res)
 })
 
 const refundRequestSchema = z.object({ reason: z.string().trim().min(4).max(2000) }).strict()
@@ -331,7 +359,7 @@ app.post('/api/v1/enrolments/:reference/refunds', publicLimiter, csrfOriginGuard
   const parsed = refundRequestSchema.safeParse(req.body)
   if (!parsed.success) return fail(res, 422, 'VALIDATION_ERROR', 'Enter a short reason for the refund request.')
   const reference = String(req.params.reference ?? '')
-  const enrollment = await getEnrollmentByToken(reference, req.get('x-enrolment-token') ?? '')
+  const enrollment = await getEnrollmentByToken(reference, enrollmentTokenFromRequest(req, reference))
   if (!enrollment) return fail(res, 404, 'ENROLMENT_NOT_FOUND', 'This confirmation link is invalid or expired.')
   const key = req.get('idempotency-key')
   if (!validIdempotencyKey(key)) return fail(res, 400, 'IDEMPOTENCY_KEY_REQUIRED', 'Refresh the page and try again.')
@@ -362,9 +390,7 @@ app.post('/api/v1/enquiries', publicLimiter, csrfOriginGuard, async (req, res) =
 })
 
 function readCookie(req: express.Request, name: string) {
-  const cookies = req.get('cookie') ?? ''
-  const entry = cookies.split(';').map(item => item.trim()).find(item => item.startsWith(`${name}=`))
-  return entry ? decodeURIComponent(entry.slice(name.length + 1)) : ''
+  return readCookieValue(req.get('cookie'), name)
 }
 async function getAdmin(req: express.Request) {
   if (!hasAdminAuth) return null
