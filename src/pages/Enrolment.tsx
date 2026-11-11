@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, ArrowRight, BadgeCheck, Check, CircleAlert, Clock3, CreditCard, GraduationCap, LockKeyhole, MessageCircle, ShieldCheck } from 'lucide-react'
 import { bootcampDates, deliveryOptions, type LearningMode, type ProgramCode } from '../data/bootcampSchedule'
 import { api, formatINR, type ApiError, type PublicProgram } from '../lib/enrolmentApi'
+import { visibleEnrolmentReference } from '../lib/enrolmentConfirmation'
 import { useProgramCatalog } from '../lib/useProgramCatalog'
 import { policyVersions } from '../data/policyVersions'
 type FormState = {
@@ -266,6 +267,7 @@ export function EnrolmentConfirmationPage() {
   const [refundReason,setRefundReason]=useState('')
   const [refundBusy,setRefundBusy]=useState(false)
   const [refundMessage,setRefundMessage]=useState('')
+  const displayReference = visibleEnrolmentReference(status?.enrolmentReference, sessionInfo?.reference)
   const refreshStatus=async(session:EnrolmentSession)=>{const result=await api<ConfirmationResponse>(`/enrolments/${session.reference}/status`,{headers:{'X-Enrolment-Token':session.token}});setStatus(result)}
   const submitRefundRequest=async()=>{
     if(!sessionInfo)return
@@ -299,12 +301,12 @@ export function EnrolmentConfirmationPage() {
     return () => { active = false }
   }, [])
 
-  if (error && !status) return <section className="enrol-confirm-page"><div className="enrol-confirm-card"><span className="enrol-confirm-symbol is-pending"><CircleAlert size={28} /></span><span className="public-card-eyebrow">PAYMENT STATUS</span><h1>We’re checking your payment.</h1><p>{error}</p><Link className="button button-gold" to="/contact">Contact Radix Minds</Link></div></section>
+  if (error && !status) return <section className="enrol-confirm-page"><div className="enrol-confirm-card"><span className="enrol-confirm-symbol is-pending"><CircleAlert size={28} /></span><span className="public-card-eyebrow">PAYMENT STATUS</span><h1>We’re checking your payment.</h1><p>{error}</p>{displayReference && <span className="enrol-confirm-reference">Enrolment reference: {displayReference}</span>}<Link className="button button-gold" to="/contact">Contact Radix Minds</Link></div></section>
   if (status?.status === 'pending' && !status.payment?.reference && !checking) {
     const waPhone = status.support.whatsappPhone.replace(/\D/g, '')
     return <section className="enrol-confirm-page"><div className="enrol-confirm-card"><span className="enrol-confirm-symbol is-pending"><Clock3 size={28} /></span><span className="public-card-eyebrow">ENROLMENT RECEIVED · PAYMENT PENDING</span><h1>We’ve received your enrolment request.</h1><p>Your request is saved as pending payment. This is not payment confirmation or a confirmed paid enrolment. The Radix Minds team will share the next step.</p><div className="enrol-receipt"><div><small>ENROLMENT REFERENCE</small><b>{status.enrolmentReference}</b></div><div><small>STUDENT</small><b>{status.studentName}</b></div><div><small>PROGRAM</small><b>{status.program.name} · {status.program.duration_days} days</b></div><div><small>SUBJECTS</small><b>{status.subjects.join(' · ')}</b></div><div><small>LEARNING MODE</small><b>{status.program.learning_mode_label}</b></div><div><small>PROGRAM START</small><b>{bootcampDates.start}</b></div><div className="enrol-receipt-total"><small>AMOUNT DUE · PAYMENT NOT RECEIVED</small><strong>{formatINR(status.price.payable_paise)}</strong></div></div><div className="enrol-next-instructions"><span><MessageCircle size={17} /> NEXT STEP</span><p>Contact the team with your enrolment reference for payment instructions. Do not send card details by message.</p><div><a href={`https://wa.me/${waPhone}`} target="_blank" rel="noreferrer">WhatsApp the team <ArrowRight size={14} /></a><Link to="/contact">Contact options <ArrowRight size={14} /></Link></div></div></div></section>
   }
-  if (!status || (checking && status.status !== 'confirmed' && status.status !== 'failed' && status.status !== 'needs_review')) return <section className="enrol-confirm-page"><div className="enrol-confirm-card"><span className="enrol-confirm-symbol is-pending"><Clock3 size={28} /></span><span className="public-card-eyebrow">PAYMENT VERIFICATION</span><h1>Checking with Razorpay…</h1><p>Your enrolment is confirmed only after our server verifies the captured payment. Please keep this page open.</p>{status && <small>Enrolment reference: {status.enrolmentReference}</small>}</div></section>
+  if (!status || (checking && status.status !== 'confirmed' && status.status !== 'failed' && status.status !== 'needs_review')) return <section className="enrol-confirm-page"><div className="enrol-confirm-card"><span className="enrol-confirm-symbol is-pending"><Clock3 size={28} /></span><span className="public-card-eyebrow">PAYMENT VERIFICATION</span><h1>Checking with Razorpay…</h1><p>Your enrolment is confirmed only after our server verifies the captured payment. Please keep this page open.</p>{displayReference && <small>Enrolment reference: {displayReference}</small>}</div></section>
   if (status.status !== 'confirmed') { sessionStorage.removeItem(REGISTRATION_KEY); return <section className="enrol-confirm-page"><div className="enrol-confirm-card"><span className="enrol-confirm-symbol is-pending"><CircleAlert size={28} /></span><span className="public-card-eyebrow">PAYMENT NOT CONFIRMED</span><h1>{status.status === 'failed' ? 'Payment wasn’t completed.' : 'We need to check this payment.'}</h1><p>{status.status === 'failed' ? 'Your registration details are saved. You can return to the program page or contact the team before retrying.' : 'Please don’t submit another payment until the Radix Minds team has checked this transaction.'}</p><span className="enrol-confirm-reference">{status.enrolmentReference}</span><Link className="button button-gold" to={`/enrol?program=${status.program.code}`}>Return to enrolment</Link></div></section> }
   sessionStorage.removeItem(REGISTRATION_KEY)
   const amount = status.payment?.amountPaise ?? status.price.payable_paise
