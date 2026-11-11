@@ -1,6 +1,7 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 import type { Request, Response, NextFunction } from 'express'
 import { config } from './config.js'
+import { isApprovedBrowserOrigin } from './originPolicy.js'
 
 export function sha256(value: string) {
   return createHash('sha256').update(value).digest('hex')
@@ -32,7 +33,7 @@ export function newPublicReference() {
 export function csrfOriginGuard(req: Request, res: Response, next: NextFunction) {
   const origin = req.get('origin')
   const fetchSite = req.get('sec-fetch-site')
-  if (origin !== config.APP_ORIGIN || (fetchSite && fetchSite !== 'same-origin' && fetchSite !== 'none')) {
+  if (!isApprovedBrowserOrigin(origin) || (fetchSite && fetchSite !== 'same-origin' && fetchSite !== 'none')) {
     return res.status(403).json({ error: { code: 'ORIGIN_REJECTED', message: 'Request origin is not allowed.' } })
   }
   next()

@@ -12,8 +12,9 @@ export function readCookieValue(cookieHeader: string | undefined, name: string) 
 }
 
 /** The status/recovery GETs can reconcile payment state, so require a same-origin browser request. */
-export function isSameOriginCookieRequest(origin: string | undefined, fetchSite: string | undefined, appOrigin: string) {
-  if (origin && origin !== appOrigin) return false
+export function isSameOriginCookieRequest(origin: string | undefined, fetchSite: string | undefined, isOriginAllowed: string | ((value: string) => boolean)) {
+  const matches = (value: string) => typeof isOriginAllowed === 'string' ? value === isOriginAllowed : isOriginAllowed(value)
+  if (origin && !matches(origin)) return false
   if (fetchSite && fetchSite !== 'same-origin') return false
-  return origin === appOrigin || fetchSite === 'same-origin'
+  return (origin !== undefined && matches(origin)) || fetchSite === 'same-origin'
 }

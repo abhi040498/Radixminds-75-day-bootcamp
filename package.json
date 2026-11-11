@@ -19,7 +19,7 @@
     "test:api-test-launcher": "node --test scripts/test-api-env.test.mjs",
     "test:whatsapp": "tsx --test server/test/whatsappConfirmation.test.ts",
     "test:refunds": "tsx --test server/test/refunds.test.ts",
-    "test:config": "node --test server/test/config.test.mjs server/test/netlifyProxy.test.mjs",
+    "test:config": "node --test server/test/config.test.mjs server/test/netlifyProxy.test.mjs && tsx --test server/test/originPolicy.test.ts",
     "test:enrolment": "tsx --test server/test/enrolmentProgramSelection.test.ts server/test/enrolmentConfirmation.test.ts server/test/enrolmentSession.test.ts server/test/enrolmentRecovery.test.ts server/test/paymentCheckoutRecovery.test.ts",
     "test:payment": "tsx --test server/test/paymentIntegrity.test.ts server/test/paymentOrderConcurrency.test.ts server/test/paymentClaimError.test.ts server/test/razorpayDiagnostics.test.ts",
     "test:policies": "tsx --test server/test/policyAcknowledgement.test.ts",

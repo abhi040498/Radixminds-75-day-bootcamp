@@ -37,6 +37,10 @@ const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().min(1).max(65535).default(4000),
   APP_ORIGIN: appOrigin.default('http://localhost:5173'),
+  // Set only in the Netlify Deploy Preview Functions scope. Netlify's runtime
+  // SITE_NAME is checked alongside this explicit context marker before a
+  // deployment-specific URL is accepted as a browser origin.
+  APPROVED_NETLIFY_CONTEXT: z.literal('deploy-preview').optional(),
   SUPABASE_URL: optional,
   SUPABASE_PUBLIC_KEY: optional,
   SUPABASE_SECRET_KEY: optional,

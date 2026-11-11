@@ -20,6 +20,7 @@ import { resolveEnrolmentProgramSelection, type EnrolmentProgram } from './enrol
 import { buildWhatsAppConfirmationDraft, isWhatsAppConfirmationEligible } from './whatsappConfirmation.js'
 import { enrolmentSessionCookieName, isSameOriginCookieRequest, readCookieValue } from './enrolmentSession.js'
 import { maskRazorpayKeyId, razorpayDiagnostic } from './razorpayDiagnostics.js'
+import { isApprovedBrowserOrigin } from './originPolicy.js'
 
 const app = express()
 app.disable('x-powered-by')
@@ -44,7 +45,7 @@ app.use((_req, res, next) => {
       requestId,
       route,
       method: _req.method,
-      originMatches: origin === undefined ? null : origin === config.APP_ORIGIN,
+      originMatches: origin === undefined ? null : isApprovedBrowserOrigin(origin),
       httpStatus: res.statusCode,
       durationMs: Math.max(0, Date.now() - startedAt),
     })
@@ -52,7 +53,7 @@ app.use((_req, res, next) => {
   next()
 })
 app.use(cors({
-  origin: (origin, callback) => callback(null, origin === config.APP_ORIGIN ? config.APP_ORIGIN : false),
+  origin: (origin, callback) => callback(null, origin && isApprovedBrowserOrigin(origin) ? origin : false),
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Idempotency-Key'],
@@ -431,7 +432,7 @@ async function sendEnrolmentStatus(reference: string, token: string, res: expres
 }
 
 app.get('/api/v1/enrolments/recover', publicLimiter, async (req, res) => {
-  if (!isSameOriginCookieRequest(req.get('origin'), req.get('sec-fetch-site'), config.APP_ORIGIN)) return fail(res, 403, 'ORIGIN_REJECTED', 'Request origin is not allowed.')
+  if (!isSameOriginCookieRequest(req.get('origin'), req.get('sec-fetch-site'), isApprovedBrowserOrigin)) return fail(res, 403, 'ORIGIN_REJECTED', 'Request origin is not allowed.')
   if (!hasDatabase) return databaseUnavailable(res)
   const reference = readCookie(req, 'rm_last_enrolment')
   const token = enrollmentTokenFromRequest(req, reference)
@@ -439,7 +440,7 @@ app.get('/api/v1/enrolments/recover', publicLimiter, async (req, res) => {
 })
 
 app.get('/api/v1/enrolments/:reference/status', publicLimiter, async (req, res) => {
-  if (!isSameOriginCookieRequest(req.get('origin'), req.get('sec-fetch-site'), config.APP_ORIGIN)) return fail(res, 403, 'ORIGIN_REJECTED', 'Request origin is not allowed.')
+  if (!isSameOriginCookieRequest(req.get('origin'), req.get('sec-fetch-site'), isApprovedBrowserOrigin)) return fail(res, 403, 'ORIGIN_REJECTED', 'Request origin is not allowed.')
   const reference = String(req.params.reference ?? '')
   return sendEnrolmentStatus(reference, enrollmentTokenFromRequest(req, reference), res)
 })
