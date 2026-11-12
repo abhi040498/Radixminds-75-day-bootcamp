@@ -1,7 +1,7 @@
 export type PaymentOutcome = 'confirmed' | 'pending' | 'failed' | 'needs_review'
 export type CheckoutEvent = 'handler' | 'payment.failed' | 'dismissed'
 
-export type PaymentAttemptSnapshot = { reference: string | null; status: string }
+export type PaymentAttemptSnapshot = { reference: string | null; status: string; retryableOrderFailure?: boolean }
 export type CheckoutStatusResult = { status: PaymentOutcome; payment?: PaymentAttemptSnapshot | null }
 
 /**
@@ -24,6 +24,7 @@ export async function resolveCheckoutOutcome(
 }
 
 export function canStartPayment(status: PaymentOutcome, payment: PaymentAttemptSnapshot | null | undefined) {
-  return status === 'failed'
-    || (status === 'pending' && (!payment || (payment.status === 'created' && payment.reference === null)))
+  if (payment?.reference) return false
+  return payment?.retryableOrderFailure === true
+    || (status === 'pending' && (!payment || payment.status === 'created' && payment.reference === null))
 }

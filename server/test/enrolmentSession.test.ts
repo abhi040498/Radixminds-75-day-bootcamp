@@ -1,6 +1,24 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { enrolmentSessionCookieName, isSameOriginCookieRequest, readCookieValue } from '../src/enrolmentSession.js'
+import { enrolmentSessionCookieName, isSameOriginCookieRequest, isSecureCookieOrigin, readCookieValue } from '../src/enrolmentSession.js'
+
+test('admin cookie Secure follows the configured HTTPS production and Deploy Preview origins', () => {
+  assert.equal(isSecureCookieOrigin('https://bootcamp.radixminds.in', true), true)
+  assert.equal(isSecureCookieOrigin('https://deploy-preview-1--radixminds75daysbootcamp.netlify.app', true), true)
+})
+
+test('only local HTTP development may issue an admin cookie without Secure', () => {
+  assert.equal(isSecureCookieOrigin('http://localhost:5173', false), false)
+  assert.equal(isSecureCookieOrigin('http://127.0.0.1:5173', false), false)
+  assert.equal(isSecureCookieOrigin('http://localhost:5173', true), true)
+})
+
+test('missing or invalid origin configuration fails closed with Secure enabled', () => {
+  assert.equal(isSecureCookieOrigin(undefined, false), true)
+  assert.equal(isSecureCookieOrigin('not a URL', false), true)
+  assert.equal(isSecureCookieOrigin('http://attacker.example', false), true)
+  assert.equal(isSecureCookieOrigin('http://localhost:5173/path', false), true)
+})
 
 test('enrolment session cookies are scoped by a validated public reference', () => {
   assert.equal(enrolmentSessionCookieName('RM-0123456789ABCDEF0123'), 'rm_enrolment_RM-0123456789ABCDEF0123')

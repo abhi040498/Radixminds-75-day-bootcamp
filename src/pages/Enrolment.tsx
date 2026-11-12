@@ -190,9 +190,10 @@ export function EnrolmentPage() {
       return
     }
     if (result.status === 'failed') {
-      setPaymentAttempt(null)
-      setRecovery(current => { const next = { ...current, paymentIdempotencyKey: makeIdempotencyKey() }; saveEnrolmentRecovery(browserStorage('localStorage'), next); return next })
-      setMessage('The server verified that this payment failed. Your enrolment remains pending, and you can retry secure payment.')
+      setPaymentAttempt(result.payment ?? null)
+      setMessage(result.payment?.reference
+        ? 'The server verified that this provider payment failed. Its payment reference is retained; check with Radix Minds before starting another payment.'
+        : 'The server verified that payment failed. Your enrolment remains pending; check payment status before retrying.')
       return
     }
     setPaymentAttempt(result.payment ?? null)
@@ -226,8 +227,10 @@ export function EnrolmentPage() {
 
   const launchPayment = async (session: EnrolmentSession, retry = false) => {
     setBusy(true); setMessage('')
+    let orderPrepared = false
     try {
       const order = await api<CheckoutOrder>(`/enrolments/${session.reference}/payment-orders`, { method: 'POST', headers: { 'Idempotency-Key': recovery.paymentIdempotencyKey }, body: '{}' })
+      orderPrepared = true
       setPaymentAttempt({ status: 'created', reference: null })
       setPaymentOutcome('pending')
       await loadRazorpayCheckout()
@@ -246,10 +249,27 @@ export function EnrolmentPage() {
       checkout.on('payment.failed', () => { void reconcileCheckout(session, 'payment.failed') })
       checkout.open()
     } catch (error) {
-      setPaymentAttempt(null)
       setPaymentOutcome('pending')
       setBusy(false)
-      setMessage(`${retry ? 'Checkout could not be retried. ' : ''}${error instanceof Error ? error.message : 'Please try again.'}`)
+      const apiError = error as ApiError
+      if (apiError.code === 'PAYMENT_ORDER_RETRY_SAFE') {
+        const nextKey = makeIdempotencyKey()
+        setRecovery(current => { const next = { ...current, paymentIdempotencyKey: nextKey }; saveEnrolmentRecovery(browserStorage('localStorage'), next); return next })
+        setPaymentAttempt({ status: 'order_failed', reference: null, retryableOrderFailure: true })
+        setMessage('Razorpay confirmed that no order was created for this attempt. A new safe payment attempt is ready; select Retry secure payment. If the provider configuration error continues, contact Radix Minds.')
+      } else if (apiError.code === 'PAYMENT_ORDER_RECONCILIATION_REQUIRED' || apiError.code === 'PAYMENT_ORDER_PROTECTED' || apiError.code === 'PAYMENT_ORDER_IN_PROGRESS' || !orderPrepared) {
+        setPaymentAttempt({ status: 'order_creation_unresolved', reference: null })
+        setMessage(apiError.code === 'PAYMENT_ORDER_RECONCILIATION_REQUIRED'
+          ? 'We could not confirm whether Razorpay created an order. Do not retry yet; contact Radix Minds to reconcile this attempt.'
+          : apiError.code === 'PAYMENT_ORDER_PROTECTED'
+            ? 'A provider payment or order is already associated with this enrolment. Check its status before continuing.'
+            : apiError.code === 'PAYMENT_ORDER_IN_PROGRESS'
+              ? 'A payment order is still being prepared. Check status again shortly before retrying.'
+              : 'We could not confirm whether Razorpay prepared an order. Your enrolment is saved; do not retry until its status is checked.')
+      } else {
+        setPaymentAttempt({ status: 'created', reference: null })
+        setMessage(`${retry ? 'Checkout could not be reopened. ' : ''}${error instanceof Error ? error.message : 'Please try again.'} Your saved payment order can be reused.`)
+      }
     }
   }
 
@@ -321,7 +341,7 @@ type ConfirmationResponse = {
   program: { code: ProgramCode; name: string; duration_days: number; learning_mode_label: string }
   subjects: string[]
   price: { payable_paise: number; currency: string }
-  payment: { reference: string | null; amountPaise: number; currency: string; status: string; capturedAt: string | null } | null
+  payment: { reference: string | null; amountPaise: number; currency: string; status: string; capturedAt: string | null; retryableOrderFailure?: boolean } | null
   refundRequest: {reference:string;status:string;requestedAt:string;cutoffAt:string;decision:string|null;decidedAt:string|null;approvedAmountPaise:number|null;providerStatus:string|null}|null
   support: { whatsappPhone: string; telegramUrl: string }
 }
@@ -354,8 +374,16 @@ export function EnrolmentConfirmationPage() {
   const retrySecurePayment=async()=>{
     if(!sessionInfo||!status?.checkoutReady||!canStartPayment(status.status,status.payment)||checkoutBusy)return
     setCheckoutBusy(true);setCheckoutMessage('')
+    let orderPrepared = false
     try{
-      const order=await api<CheckoutOrder>(`/enrolments/${sessionInfo.reference}/payment-orders`,{method:'POST',headers:{'Idempotency-Key':submittedRecovery.paymentIdempotencyKey},body:'{}'})
+      let idempotencyKey = submittedRecovery.paymentIdempotencyKey
+      if (status.payment?.retryableOrderFailure) {
+        idempotencyKey = makeIdempotencyKey()
+        setSubmittedRecovery(current => { const next = { ...current, paymentIdempotencyKey: idempotencyKey }; saveEnrolmentRecovery(browserStorage('localStorage'), next); return next })
+      }
+      const order=await api<CheckoutOrder>(`/enrolments/${sessionInfo.reference}/payment-orders`,{method:'POST',headers:{'Idempotency-Key':idempotencyKey},body:'{}'})
+      orderPrepared = true
+      setStatus(current => current ? { ...current, payment: { ...(current.payment ?? { reference: null, amountPaise: order.amount, currency: order.currency, capturedAt: null }), status: 'created', reference: null, retryableOrderFailure: false } } : current)
       await loadRazorpayCheckout()
       const RazorpayConstructor=(window as WindowWithRazorpay).Razorpay
       if(!RazorpayConstructor)throw new Error('Secure checkout could not start. Please try again.')
@@ -374,7 +402,23 @@ export function EnrolmentConfirmationPage() {
       }})
       checkout.on('payment.failed',()=>{void reconcile('payment.failed')})
       checkout.open()
-    }catch(cause){setCheckoutBusy(false);setCheckoutMessage(cause instanceof Error?cause.message:'Secure checkout could not be prepared. Please retry shortly.')}
+    }catch(cause){
+      setCheckoutBusy(false)
+      const apiError = cause as ApiError
+      if (apiError.code === 'PAYMENT_ORDER_RETRY_SAFE') {
+        const nextKey = makeIdempotencyKey()
+        setSubmittedRecovery(current => { const next = { ...current, paymentIdempotencyKey: nextKey }; saveEnrolmentRecovery(browserStorage('localStorage'), next); return next })
+        setStatus(current => current ? { ...current, payment: { ...(current.payment ?? { reference: null, amountPaise: current.price.payable_paise, currency: current.price.currency, capturedAt: null }), status: 'order_failed', reference: null, retryableOrderFailure: true } } : current)
+        setCheckoutMessage('Razorpay confirmed that no order was created for this attempt. A new safe payment attempt is ready. If the provider configuration error continues, contact Radix Minds.')
+      } else if (!orderPrepared || apiError.code === 'PAYMENT_ORDER_RECONCILIATION_REQUIRED' || apiError.code === 'PAYMENT_ORDER_PROTECTED' || apiError.code === 'PAYMENT_ORDER_IN_PROGRESS') {
+        setStatus(current => current ? { ...current, payment: { ...(current.payment ?? { reference: null, amountPaise: current.price.payable_paise, currency: current.price.currency, capturedAt: null }), status: 'order_creation_unresolved', reference: null, retryableOrderFailure: false } } : current)
+        setCheckoutMessage(apiError.code === 'PAYMENT_ORDER_RECONCILIATION_REQUIRED'
+          ? 'We could not confirm whether Razorpay created an order. Do not retry yet; contact Radix Minds to reconcile this attempt.'
+          : 'We could not confirm the order status. Do not retry until the payment attempt has been checked.')
+      } else {
+        setCheckoutMessage(`${cause instanceof Error ? cause.message : 'Secure checkout could not be prepared.'} Your saved payment order can be reused.`)
+      }
+    }
   }
   const checkConfirmationStatus=async()=>{
     if(!sessionInfo||checkoutBusy)return
@@ -417,10 +461,10 @@ export function EnrolmentConfirmationPage() {
   if (error && !status) return <section className="enrol-confirm-page"><div className="enrol-confirm-card"><span className="enrol-confirm-symbol is-pending"><CircleAlert size={28} /></span><span className="public-card-eyebrow">PAYMENT STATUS</span><h1>We’re checking your payment.</h1><p>{error}</p>{displayReference && <span className="enrol-confirm-reference">Enrolment reference: {displayReference}</span>}<Link className="button button-gold" to="/contact">Contact Radix Minds</Link></div></section>
   if (status?.status === 'pending' && !status.payment?.reference && !checking) {
     const waPhone = status.support.whatsappPhone.replace(/\D/g, '')
-    return <section className="enrol-confirm-page"><div className="enrol-confirm-card"><span className="enrol-confirm-symbol is-pending"><Clock3 size={28} /></span><span className="public-card-eyebrow">ENROLMENT RECEIVED · PAYMENT PENDING</span><h1>We’ve received your enrolment request.</h1><p>Your request is saved as pending payment. This is not payment confirmation or a confirmed paid enrolment. The Radix Minds team will share the next step.</p><div className="enrol-receipt"><div><small>ENROLMENT REFERENCE</small><b>{status.enrolmentReference}</b></div><div><small>STUDENT</small><b>{status.studentName}</b></div><div><small>PROGRAM</small><b>{status.program.name} · {status.program.duration_days} days</b></div><div><small>SUBJECTS</small><b>{status.subjects.join(' · ')}</b></div><div><small>LEARNING MODE</small><b>{status.program.learning_mode_label}</b></div><div><small>PROGRAM START</small><b>{bootcampDates.start}</b></div><div className="enrol-receipt-total"><small>AMOUNT DUE · PAYMENT NOT RECEIVED</small><strong>{formatINR(status.price.payable_paise)}</strong></div></div>{status.checkoutReady&&<button className="button button-gold" type="button" disabled={checkoutBusy} onClick={()=>void retrySecurePayment()}>{checkoutBusy?'Preparing secure checkout…':'Continue to secure payment'}</button>}{checkoutMessage&&<p role="status">{checkoutMessage}</p>}<div className="enrol-next-instructions"><span><MessageCircle size={17} /> NEXT STEP</span><p>Contact the team with your enrolment reference for payment instructions. Do not send card details by message.</p><div><a href={`https://wa.me/${waPhone}`} target="_blank" rel="noreferrer">WhatsApp the team <ArrowRight size={14} /></a><Link to="/contact">Contact options <ArrowRight size={14} /></Link></div></div></div></section>
+    return <section className="enrol-confirm-page"><div className="enrol-confirm-card"><span className="enrol-confirm-symbol is-pending"><Clock3 size={28} /></span><span className="public-card-eyebrow">ENROLMENT RECEIVED · PAYMENT PENDING</span><h1>We’ve received your enrolment request.</h1><p>Your request is saved as pending payment. This is not payment confirmation or a confirmed paid enrolment. The Radix Minds team will share the next step.</p>{status.payment?.status === 'order_failed' && !status.payment.retryableOrderFailure && <p role="status">We could not confirm whether Razorpay created an order. Do not retry payment until Radix Minds has reconciled this attempt.</p>}<div className="enrol-receipt"><div><small>ENROLMENT REFERENCE</small><b>{status.enrolmentReference}</b></div><div><small>STUDENT</small><b>{status.studentName}</b></div><div><small>PROGRAM</small><b>{status.program.name} · {status.program.duration_days} days</b></div><div><small>SUBJECTS</small><b>{status.subjects.join(' · ')}</b></div><div><small>LEARNING MODE</small><b>{status.program.learning_mode_label}</b></div><div><small>PROGRAM START</small><b>{bootcampDates.start}</b></div><div className="enrol-receipt-total"><small>AMOUNT DUE · PAYMENT NOT RECEIVED</small><strong>{formatINR(status.price.payable_paise)}</strong></div></div>{status.checkoutReady && canStartPayment(status.status, status.payment) && <button className="button button-gold" type="button" disabled={checkoutBusy} onClick={()=>void retrySecurePayment()}>{checkoutBusy?'Preparing secure checkout…':'Continue to secure payment'}</button>}{!canStartPayment(status.status,status.payment) && <button className="button button-gold" type="button" disabled={checkoutBusy} onClick={()=>void checkConfirmationStatus()}>{checkoutBusy?'Checking payment…':'Check payment status'}</button>}{checkoutMessage&&<p role="status">{checkoutMessage}</p>}<div className="enrol-next-instructions"><span><MessageCircle size={17} /> NEXT STEP</span><p>Contact the team with your enrolment reference for payment instructions. Do not send card details by message.</p><div><a href={`https://wa.me/${waPhone}`} target="_blank" rel="noreferrer">WhatsApp the team <ArrowRight size={14} /></a><Link to="/contact">Contact options <ArrowRight size={14} /></Link></div></div></div></section>
   }
   if (!status || (checking && status.status !== 'confirmed' && status.status !== 'failed' && status.status !== 'needs_review')) return <section className="enrol-confirm-page"><div className="enrol-confirm-card"><span className="enrol-confirm-symbol is-pending"><Clock3 size={28} /></span><span className="public-card-eyebrow">PAYMENT VERIFICATION</span><h1>Checking with Razorpay…</h1><p>Your enrolment is confirmed only after our server verifies the captured payment. Please keep this page open.</p>{displayReference && <small>Enrolment reference: {displayReference}</small>}</div></section>
-  if (status.status !== 'confirmed') { return <section className="enrol-confirm-page"><div className="enrol-confirm-card"><span className="enrol-confirm-symbol is-pending"><CircleAlert size={28} /></span><span className="public-card-eyebrow">PAYMENT NOT CONFIRMED</span><h1>{status.status === 'failed' ? 'Payment wasn’t completed.' : 'We need to check this payment.'}</h1><p>{status.status === 'failed' ? 'Your registration details are saved. You can retry secure checkout or contact the team.' : 'Please don’t submit another payment until the Radix Minds team has checked this transaction.'}</p><span className="enrol-confirm-reference">{status.enrolmentReference}</span>{canStartPayment(status.status,status.payment)&&status.checkoutReady&&<button className="button button-gold" type="button" disabled={checkoutBusy} onClick={()=>void retrySecurePayment()}>{checkoutBusy?'Preparing secure checkout…':status.status==='failed'?'Retry secure payment':'Continue to secure payment'}</button>}{status.status==='pending'&&status.payment?.reference&&<button className="button button-gold" type="button" disabled={checkoutBusy} onClick={()=>void checkConfirmationStatus()}>{checkoutBusy?'Checking payment…':'Check payment status'}</button>}{checkoutMessage&&<p role="status">{checkoutMessage}</p>}<Link to="/contact">Contact Radix Minds</Link></div></section> }
+  if (status.status !== 'confirmed') { return <section className="enrol-confirm-page"><div className="enrol-confirm-card"><span className="enrol-confirm-symbol is-pending"><CircleAlert size={28} /></span><span className="public-card-eyebrow">PAYMENT NOT CONFIRMED</span><h1>{status.status === 'failed' ? 'Payment wasn’t completed.' : 'We need to check this payment.'}</h1><p>{status.status === 'failed' ? 'Your registration details are saved. Check with Radix Minds before starting another payment.' : 'Please don’t submit another payment until the Radix Minds team has checked this transaction.'}</p><span className="enrol-confirm-reference">{status.enrolmentReference}</span>{canStartPayment(status.status,status.payment)&&status.checkoutReady&&<button className="button button-gold" type="button" disabled={checkoutBusy} onClick={()=>void retrySecurePayment()}>{checkoutBusy?'Preparing secure checkout…':status.payment?.retryableOrderFailure?'Retry secure payment':'Continue to secure payment'}</button>}{!canStartPayment(status.status,status.payment)&&<button className="button button-gold" type="button" disabled={checkoutBusy} onClick={()=>void checkConfirmationStatus()}>{checkoutBusy?'Checking payment…':'Check payment status'}</button>}{checkoutMessage&&<p role="status">{checkoutMessage}</p>}<Link to="/contact">Contact Radix Minds</Link></div></section> }
   const amount = status.payment?.amountPaise ?? status.price.payable_paise
   const waPhone = status.support.whatsappPhone.replace(/\D/g, '')
   return <section className="enrol-confirm-page"><div className="enrol-confirm-card is-success"><span className="enrol-confirm-symbol"><BadgeCheck size={32} /></span><span className="public-card-eyebrow">PAID ENROLMENT · VERIFIED</span><h1>You’re enrolled, {status.studentName.split(' ')[0]}.</h1><p>Your payment has been verified by our server. The Radix Minds team will share batch details and next steps through the contact channels below.</p><div className="enrol-receipt"><span className="enrol-receipt-title"><CreditCard size={17} /> PAYMENT ACKNOWLEDGEMENT</span><div><small>ENROLMENT ID</small><b>{status.enrolmentReference}</b></div><div><small>PROGRAM</small><b>{status.program.name} · {status.program.duration_days} days</b></div><div><small>SUBJECTS</small><b>{status.subjects.join(' · ')}</b></div><div><small>LEARNING MODE</small><b>{status.program.learning_mode_label}</b></div><div><small>PAYMENT REFERENCE</small><b>{status.payment?.reference ?? 'Verified by Razorpay'}</b></div><div className="enrol-receipt-total"><small>AMOUNT PAID</small><strong>{formatINR(amount)}</strong></div></div><div className="enrol-next-instructions"><span><MessageCircle size={17} /> BATCH JOINING DETAILS</span><p>Message Radix Minds on WhatsApp or Telegram to receive the batch communication instructions. You will not be added to a private group without your consent.</p><div><a href={`https://wa.me/${waPhone}`} target="_blank" rel="noreferrer">WhatsApp the team <ArrowRight size={14} /></a><a href={status.support.telegramUrl} target="_blank" rel="noreferrer">Open Telegram <ArrowRight size={14} /></a></div></div><section className="student-refund-request"><strong>REFUND POLICY</strong><p>Students may submit refund requests within 7 calendar days from the date of successful payment. Submission of a refund request does not guarantee approval. All requests are subject to review by RadixMinds management. The administration will determine the eligibility and approved refund amount on a case-by-case basis, subject to applicable laws and the published terms and conditions.</p>{status.refundRequest?<div className="student-refund-status"><b>Request {status.refundRequest.reference}</b><span>Status: {status.refundRequest.status.replace(/_/g,' ')}</span>{status.refundRequest.approvedAmountPaise!==null&&<span>Approved amount: {formatINR(status.refundRequest.approvedAmountPaise)}</span>}<small>Submission does not guarantee approval. Radix Minds will communicate its decision directly.</small></div>:<><label>Reason for request<textarea value={refundReason} onChange={event=>setRefundReason(event.target.value)} minLength={4} maxLength={2000} rows={3} placeholder="Tell us why you are requesting a refund" /></label><button type="button" disabled={refundBusy||refundReason.trim().length<4} onClick={()=>void submitRefundRequest()}>{refundBusy?'Submitting request…':'Submit refund request for review'}</button></>}{refundMessage&&<p role="status">{refundMessage}</p>}</section><button className="enrol-print-button" type="button" onClick={() => window.print()}>Print payment acknowledgement</button><p className="enrol-receipt-footnote">Keep this page or save it as PDF for your records. This acknowledgement is generated from the verified payment details.</p></div></section>

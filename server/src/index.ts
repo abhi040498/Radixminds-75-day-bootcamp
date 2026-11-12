@@ -18,7 +18,7 @@ import { createPaymentOrder, PaymentOrderError } from './paymentOrderCoordinator
 import { paymentOrderStore } from './paymentOrderStore.js'
 import { resolveEnrolmentProgramSelection, type EnrolmentProgram } from './enrolmentProgramSelection.js'
 import { buildWhatsAppConfirmationDraft, isWhatsAppConfirmationEligible } from './whatsappConfirmation.js'
-import { enrolmentSessionCookieName, isSameOriginCookieRequest, readCookieValue } from './enrolmentSession.js'
+import { enrolmentSessionCookieName, isSameOriginCookieRequest, isSecureCookieOrigin, readCookieValue } from './enrolmentSession.js'
 import { maskRazorpayKeyId, razorpayDiagnostic } from './razorpayDiagnostics.js'
 import { isApprovedBrowserOrigin } from './originPolicy.js'
 
@@ -339,6 +339,9 @@ app.post('/api/v1/enrolments/:reference/payment-orders', checkoutLimiter, csrfOr
     if (error instanceof PaymentOrderError) {
       if (error.code === 'idempotency_conflict') return fail(res, 409, 'IDEMPOTENCY_KEY_CONFLICT', 'This checkout request key is already associated with a different registration. Start a fresh checkout request.')
       if (error.code === 'in_progress') return fail(res, 409, 'PAYMENT_ORDER_IN_PROGRESS', 'A payment order is already being prepared. Wait briefly before trying again.')
+      if (error.code === 'retry_safe') return fail(res, 409, 'PAYMENT_ORDER_RETRY_SAFE', 'Razorpay definitively rejected this order request, so no reusable order was created. A fresh safe checkout attempt is available. If the configuration error continues, contact Radix Minds.')
+      if (error.code === 'reconciliation_required') return fail(res, 409, 'PAYMENT_ORDER_RECONCILIATION_REQUIRED', 'We could not confirm whether Razorpay created an order. Do not retry yet; Radix Minds must reconcile this payment attempt first.')
+      if (error.code === 'payment_protected') return fail(res, 409, 'PAYMENT_ORDER_PROTECTED', 'A payment or provider order is already associated with this registration. Check payment status before continuing.')
       if (error.code === 'retry') return fail(res, 409, 'PAYMENT_ORDER_RETRY', 'Please start a fresh checkout attempt to prepare a payment order.')
       if (error.code === 'lease_lost') return fail(res, 409, 'PAYMENT_ORDER_RETRY', 'This order preparation expired before it could be saved. It cannot be used; retry checkout to prepare a fresh order.')
       if (error.code === 'provider_unavailable') return fail(res, 503, 'PAYMENT_PROVIDER_UNAVAILABLE', 'Razorpay could not prepare checkout. Your registration is saved; please retry or contact the team.')
@@ -401,7 +404,7 @@ async function sendEnrolmentStatus(reference: string, token: string, res: expres
   res.setHeader('Cache-Control', 'private, no-store')
   const db = getDatabase()
   const { data: student } = await db.from('students').select('full_name').eq('id', enrollment.student_id).maybeSingle()
-  const { data: payment } = await db.from('payments').select('provider_order_id,provider_payment_id,amount_paise,currency,status,captured_at').eq('enrolment_id', enrollment.id).order('attempt_number', { ascending: false }).limit(1).maybeSingle()
+  const { data: payment } = await db.from('payments').select('provider_order_id,provider_payment_id,amount_paise,currency,status,captured_at,order_creation_retryable').eq('enrolment_id', enrollment.id).order('attempt_number', { ascending: false }).limit(1).maybeSingle()
 
   if (enrollment.status !== 'confirmed' && payment?.provider_order_id && hasRazorpay) {
     try {
@@ -424,11 +427,11 @@ async function sendEnrolmentStatus(reference: string, token: string, res: expres
   }
 
   const { data: finalEnrollment } = await db.from('enrolments').select('status').eq('id', enrollment.id).single()
-  const { data: finalPayment } = await db.from('payments').select('provider_payment_id,amount_paise,currency,status,captured_at').eq('enrolment_id', enrollment.id).order('attempt_number', { ascending: false }).limit(1).maybeSingle()
+  const { data: finalPayment } = await db.from('payments').select('provider_payment_id,amount_paise,currency,status,captured_at,order_creation_retryable').eq('enrolment_id', enrollment.id).order('attempt_number', { ascending: false }).limit(1).maybeSingle()
   const { data: refundRequest } = await db.from('refund_requests').select('request_reference,status,requested_at,cutoff_at,decision,decided_at,approved_amount_paise,provider_status').eq('enrolment_id', enrollment.id).maybeSingle()
   const status = finalEnrollment?.status === 'confirmed' ? 'confirmed' : finalPayment?.status === 'failed' ? 'failed' : finalPayment?.status === 'needs_review' || finalEnrollment?.status === 'needs_review' ? 'needs_review' : 'pending'
   const checkoutReady = (status === 'pending' || status === 'failed') && enrollment.status === 'pending_payment' && checkoutBaseReady && validateRazorpayKeyMode()
-  return res.json({ status, checkoutReady, enrolmentReference: enrollment.public_reference, studentName: student?.full_name ?? '', program: enrollment.program_snapshot, subjects: enrollment.subjects_snapshot, price: enrollment.pricing_snapshot, payment: finalPayment ? { reference: finalPayment.provider_payment_id, amountPaise: finalPayment.amount_paise, currency: finalPayment.currency, status: finalPayment.status, capturedAt: finalPayment.captured_at } : null, refundRequest: refundRequest ? { reference: refundRequest.request_reference, status: refundRequest.status, requestedAt: refundRequest.requested_at, cutoffAt: refundRequest.cutoff_at, decision: refundRequest.decision, decidedAt: refundRequest.decided_at, approvedAmountPaise: refundRequest.approved_amount_paise, providerStatus: refundRequest.provider_status } : null, support: { whatsappPhone: config.WHATSAPP_PHONE, telegramUrl: config.TELEGRAM_URL } })
+  return res.json({ status, checkoutReady, enrolmentReference: enrollment.public_reference, studentName: student?.full_name ?? '', program: enrollment.program_snapshot, subjects: enrollment.subjects_snapshot, price: enrollment.pricing_snapshot, payment: finalPayment ? { reference: finalPayment.provider_payment_id, amountPaise: finalPayment.amount_paise, currency: finalPayment.currency, status: finalPayment.status, capturedAt: finalPayment.captured_at, retryableOrderFailure: finalPayment.order_creation_retryable === true } : null, refundRequest: refundRequest ? { reference: refundRequest.request_reference, status: refundRequest.status, requestedAt: refundRequest.requested_at, cutoffAt: refundRequest.cutoff_at, decision: refundRequest.decision, decidedAt: refundRequest.decided_at, approvedAmountPaise: refundRequest.approved_amount_paise, providerStatus: refundRequest.provider_status } : null, support: { whatsappPhone: config.WHATSAPP_PHONE, telegramUrl: config.TELEGRAM_URL } })
 }
 
 app.get('/api/v1/enrolments/recover', publicLimiter, async (req, res) => {
@@ -494,6 +497,12 @@ async function getAdmin(req: express.Request) {
   const { data: admin } = await getDatabase().from('admin_users').select('id,role,is_active').eq('id', user.id).maybeSingle()
   if (!admin?.is_active) return null
   return admin as { id: string; role: 'owner' | 'operations' | 'finance'; is_active: boolean }
+}
+const adminSessionCookieOptions = {
+  httpOnly: true,
+  secure: isSecureCookieOrigin(config.APP_ORIGIN, config.NODE_ENV === 'production' || process.env.NETLIFY === 'true' || Boolean(process.env.AWS_LAMBDA_FUNCTION_NAME)),
+  sameSite: 'lax' as const,
+  path: '/api/v1/admin',
 }
 async function requireAdmin(req: express.Request, res: express.Response, next: express.NextFunction) {
   try {
@@ -585,11 +594,11 @@ app.post('/api/v1/admin/session', adminLoginLimiter, csrfOriginGuard, async (req
   if (error || !data.session || !data.user) return fail(res, 401, 'ADMIN_SIGN_IN_FAILED', 'Admin sign-in failed.')
   const { data: admin } = await getDatabase().from('admin_users').select('id,is_active,role').eq('id', data.user.id).maybeSingle()
   if (!admin?.is_active) return fail(res, 403, 'ADMIN_NOT_AUTHORIZED', 'This account is not authorized for the enrolment console.')
-  res.cookie('rm_admin_session', data.session.access_token, { httpOnly: true, secure: config.NODE_ENV === 'production', sameSite: 'lax', maxAge: data.session.expires_in * 1000, path: '/api/v1/admin' })
+  res.cookie('rm_admin_session', data.session.access_token, { ...adminSessionCookieOptions, maxAge: data.session.expires_in * 1000 })
   return res.json({ signedIn: true, admin: { email: data.user.email, role: admin.role } })
 })
 app.post('/api/v1/admin/session/logout', csrfOriginGuard, (req, res) => {
-  res.clearCookie('rm_admin_session', { httpOnly: true, secure: config.NODE_ENV === 'production', sameSite: 'lax', path: '/api/v1/admin' })
+  res.clearCookie('rm_admin_session', adminSessionCookieOptions)
   res.json({ signedOut: true })
 })
 app.get('/api/v1/admin/session', requireAdmin, (_req, res) => res.json({ signedIn: true, role: (res.locals.admin as { role: string }).role }))
