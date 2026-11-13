@@ -1,8 +1,9 @@
-import express, { type ErrorRequestHandler } from 'express'
+import express, { type ErrorRequestHandler, type Request, type RequestHandler } from 'express'
 import { randomUUID } from 'node:crypto'
+import { isIP } from 'node:net'
 import cors from 'cors'
 import helmet from 'helmet'
-import rateLimit from 'express-rate-limit'
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit'
 import Razorpay from 'razorpay'
 import { z } from 'zod'
 import { config, boardOptions, languageOptions, hasAdminAuth, hasDatabase, hasRazorpay, checkoutBaseReady } from './config.js'
@@ -18,15 +19,45 @@ app.disable('x-powered-by')
 app.use(helmet({ crossOriginEmbedderPolicy: false }))
 app.use(cors({ origin: config.APP_ORIGIN, credentials: true, methods: ['GET', 'POST', 'PATCH', 'OPTIONS'], allowedHeaders: ['Content-Type', 'Idempotency-Key', 'X-Enrolment-Token'] }))
 app.use((req, res, next) => {
-  const requestId = req.get('x-request-id')?.slice(0, 80) || randomUUID()
+  const suppliedRequestId = req.get('x-request-id')
+  const requestId = suppliedRequestId && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(suppliedRequestId)
+    ? suppliedRequestId
+    : randomUUID()
   res.setHeader('x-request-id', requestId)
   res.locals.requestId = requestId
   next()
 })
 
-const publicLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 30, standardHeaders: 'draft-8', legacyHeaders: false })
-const checkoutLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 8, standardHeaders: 'draft-8', legacyHeaders: false })
-const adminLoginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 8, standardHeaders: 'draft-8', legacyHeaders: false })
+// Netlify's trusted platform IP is adapted to socket.remoteAddress by the
+// function entry point. Never use X-Forwarded-For or enable Express proxy trust.
+app.set('trust proxy', false)
+function trustedRateLimitKey(req: Request) {
+  const clientIp = req.socket.remoteAddress
+  // The route guard below rejects missing/invalid addresses before a limiter.
+  // Keep a restrictive key as a final defense if the guard is ever reordered.
+  return typeof clientIp === 'string' && isIP(clientIp) !== 0
+    ? ipKeyGenerator(clientIp)
+    : 'trusted-client-ip-unavailable'
+}
+const limiterOptions = { windowMs: 15 * 60 * 1000, standardHeaders: 'draft-8' as const, legacyHeaders: false, keyGenerator: trustedRateLimitKey }
+const publicLimiter = rateLimit({ ...limiterOptions, limit: 30 })
+const checkoutLimiter = rateLimit({ ...limiterOptions, limit: 8 })
+const adminLoginLimiter = rateLimit({ ...limiterOptions, limit: 8 })
+
+const requireTrustedClientIp: RequestHandler = (req, res, next) => {
+  const clientIp = req.socket.remoteAddress
+  if (typeof clientIp !== 'string' || isIP(clientIp) === 0) {
+    return fail(res, 503, 'CLIENT_IP_UNAVAILABLE', 'This request cannot be processed right now. Please try again later.')
+  }
+  return next()
+}
+
+const requireEnrollmentPolicy: RequestHandler = (_req, res, next) => {
+  if (config.POLICIES_APPROVED !== 'true') {
+    return fail(res, 503, 'POLICIES_NOT_APPROVED', 'Enrolment submissions are temporarily unavailable while the first-seven-day refund clause is finalized. Please contact Radix Minds.')
+  }
+  return next()
+}
 
 type ApiErrorCode = 'CONFIGURATION_REQUIRED' | 'VALIDATION_ERROR' | 'NOT_FOUND' | 'PAYMENT_PENDING' | 'PAYMENT_FAILED' | 'PAYMENT_MISMATCH' | 'ALREADY_CONFIRMED'
 function fail(res: express.Response, status: number, code: ApiErrorCode | string, message: string, fields?: Record<string, string>) {
@@ -116,9 +147,8 @@ app.get('/api/v1/programs', async (_req, res) => {
   return res.json({ programs })
 })
 
-app.post('/api/v1/enrolments', publicLimiter, csrfOriginGuard, async (req, res) => {
+app.post('/api/v1/enrolments', csrfOriginGuard, requireEnrollmentPolicy, requireTrustedClientIp, publicLimiter, async (req, res) => {
   if (!hasDatabase) return databaseUnavailable(res)
-  if (config.POLICIES_APPROVED !== 'true') return fail(res, 503, 'POLICIES_NOT_APPROVED', 'Enrolment submissions are temporarily unavailable while the first-seven-day refund clause is finalized. Please contact Radix Minds.')
   const parsed = enrolmentSchema.safeParse(req.body)
   if (!parsed.success) return fail(res, 422, 'VALIDATION_ERROR', 'Please check the highlighted fields and try again.', Object.fromEntries(parsed.error.issues.map(issue => [String(issue.path[0] ?? 'form'), issue.message])))
   const idempotencyKey = req.get('idempotency-key')
@@ -192,7 +222,7 @@ function withCheckoutOrder(payment: { id: string; status: string; provider_order
   return { paymentAttemptId: payment.id, enrolmentReference: reference, orderId: payment.provider_order_id, keyId: config.RAZORPAY_KEY_ID, amount: payment.amount_paise, currency: payment.currency, name: 'Radix Minds', description: '75-Day Board Bootcamp', status: payment.status }
 }
 
-app.post('/api/v1/enrolments/:reference/payment-orders', checkoutLimiter, csrfOriginGuard, async (req, res) => {
+app.post('/api/v1/enrolments/:reference/payment-orders', csrfOriginGuard, requireTrustedClientIp, checkoutLimiter, async (req, res) => {
   if (!hasDatabase) return databaseUnavailable(res)
   if (!checkoutBaseReady || !validateRazorpayKeyMode()) return fail(res, 503, 'PAYMENT_NOT_CONFIGURED', 'Secure online payment is not configured yet. Please contact Radix Minds.')
   const token = req.get('x-enrolment-token') ?? ''
@@ -220,7 +250,7 @@ app.post('/api/v1/enrolments/:reference/payment-orders', checkoutLimiter, csrfOr
 })
 
 const verifySchema = z.object({ enrolmentReference: z.string().regex(/^RM-[A-F0-9]{20}$/), razorpayOrderId: z.string().min(8).max(64), razorpayPaymentId: z.string().min(8).max(64), razorpaySignature: z.string().regex(/^[0-9a-f]{64}$/i) })
-app.post('/api/v1/payments/verify', checkoutLimiter, csrfOriginGuard, async (req, res) => {
+app.post('/api/v1/payments/verify', csrfOriginGuard, requireTrustedClientIp, checkoutLimiter, async (req, res) => {
   if (!hasDatabase || !checkoutBaseReady) return fail(res, 503, 'PAYMENT_NOT_CONFIGURED', 'Payment verification is not available yet. Please contact the team.')
   const parsed = verifySchema.safeParse(req.body)
   if (!parsed.success) return fail(res, 422, 'VALIDATION_ERROR', 'Payment details could not be verified.')
@@ -257,7 +287,7 @@ app.post('/api/v1/payments/verify', checkoutLimiter, csrfOriginGuard, async (req
   }
 })
 
-app.get('/api/v1/enrolments/:reference/status', publicLimiter, async (req, res) => {
+app.get('/api/v1/enrolments/:reference/status', requireTrustedClientIp, publicLimiter, async (req, res) => {
   if (!hasDatabase) return databaseUnavailable(res)
   const enrollment = await getEnrollmentByToken(String(req.params.reference ?? ''), req.get('x-enrolment-token') ?? '')
   if (!enrollment) return fail(res, 404, 'ENROLMENT_NOT_FOUND', 'This confirmation link is invalid or expired.')
@@ -283,7 +313,7 @@ app.get('/api/v1/enrolments/:reference/status', publicLimiter, async (req, res) 
   return res.json({ status, enrolmentReference: enrollment.public_reference, studentName: student?.full_name ?? '', program: enrollment.program_snapshot, subjects: enrollment.subjects_snapshot, price: enrollment.pricing_snapshot, payment: finalPayment ? { reference: finalPayment.provider_payment_id, amountPaise: finalPayment.amount_paise, currency: finalPayment.currency, status: finalPayment.status, capturedAt: finalPayment.captured_at } : null, support: { whatsappPhone: config.WHATSAPP_PHONE, telegramUrl: config.TELEGRAM_URL } })
 })
 
-app.post('/api/v1/enquiries', publicLimiter, csrfOriginGuard, async (req, res) => {
+app.post('/api/v1/enquiries', csrfOriginGuard, requireTrustedClientIp, publicLimiter, async (req, res) => {
   if (!hasDatabase) return databaseUnavailable(res)
   const parsed = enquirySchema.safeParse(req.body)
   if (!parsed.success) return fail(res, 422, 'VALIDATION_ERROR', 'Please check the enquiry form and try again.', Object.fromEntries(parsed.error.issues.map(issue => [String(issue.path[0] ?? 'form'), issue.message])))
@@ -318,7 +348,7 @@ async function requireAdmin(req: express.Request, res: express.Response, next: e
   } catch { return fail(res, 503, 'ADMIN_AUTH_UNAVAILABLE', 'Admin sign-in is temporarily unavailable.') }
 }
 
-app.post('/api/v1/admin/session', adminLoginLimiter, csrfOriginGuard, async (req, res) => {
+app.post('/api/v1/admin/session', csrfOriginGuard, requireTrustedClientIp, adminLoginLimiter, async (req, res) => {
   if (!hasAdminAuth) return fail(res, 503, 'ADMIN_NOT_CONFIGURED', 'Supabase admin sign-in is not configured.')
   const parsed = z.object({ email: z.email().max(180), password: z.string().min(8).max(256) }).safeParse(req.body)
   if (!parsed.success) return fail(res, 422, 'VALIDATION_ERROR', 'Enter a valid admin email and password.')
@@ -514,8 +544,23 @@ app.patch('/api/v1/admin/enquiries/:id', requireAdmin, csrfOriginGuard, async (r
   return res.json({updated:true})
 })
 
-const errorHandler: ErrorRequestHandler = (error, _req, res, _next) => {
-  console.error('api_error', { requestId: res.locals.requestId, name: error instanceof Error ? error.name : 'unknown' })
+const sanitizedLogField = (value: unknown) => typeof value === 'string'
+  ? value.replace(/[^A-Za-z0-9_.:-]/g, '').slice(0, 80) || 'unknown'
+  : 'unknown'
+
+const errorHandler: ErrorRequestHandler = (error, req, res, _next) => {
+  const errorName = error instanceof Error ? error.name : 'unknown'
+  const errorCode = error && typeof error === 'object' && 'code' in error ? error.code : undefined
+  const stackFrames = error instanceof Error && error.stack
+    ? error.stack.split('\n').slice(1, 9).map((frame) => frame.trim().slice(0, 300))
+    : []
+  console.error('api_error', {
+    requestId: res.locals.requestId,
+    method: req.method,
+    errorName: sanitizedLogField(errorName),
+    errorCode: sanitizedLogField(errorCode),
+    stackFrames,
+  })
   return fail(res, 500, 'INTERNAL_ERROR', 'Something went wrong. Please try again or contact the team.')
 }
 
