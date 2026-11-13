@@ -20,7 +20,7 @@ export function Hero() {
         <p className="hero-description">Whether you need to strengthen your concepts, complete your syllabus, improve your answer-writing skills or become more confident before the examination, we provide a structured preparation journey to help you move forward.</p>
         <div className="hero-point-list" aria-label="Bootcamp features">{heroPoints.map(({ Icon, first, second }) => <span key={first}><Icon size={34} strokeWidth={2.1} /><span>{first}<br />{second}</span></span>)}</div>
         <div className="hero-actions">
-          <a className="button button-gold" href="#programs">Explore Class 10 &amp; 12 Programmes <ArrowRight size={19} /></a>
+          <Link className="button button-gold" to="/programs">Explore Class 10 &amp; 12 Programmes <ArrowRight size={19} /></Link>
           <Link className="button button-text-light" to="/contact">Talk to Our Team <Phone size={16} /></Link>
         </div>
         <p className="hero-punchline"><Rocket size={20} aria-hidden="true" /> Your potential is there. Let’s prepare to bring it out.</p>

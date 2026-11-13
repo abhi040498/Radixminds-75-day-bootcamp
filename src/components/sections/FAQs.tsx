@@ -11,7 +11,6 @@ const homeQuestions = [
   ['What is the weekly timetable?', 'Class 10 weekday sessions are 4:00–6:30 PM for Mathematics and Science on alternate days, and 6:30–8:00 PM for Social Science and English. Class 12 weekday sessions are 4:00–8:00 PM for Physics, Chemistry and the selected Mathematics or Biology pathway on alternate days. Sunday sessions for both run 10:00 AM–4:00 PM for practice, revision and doubt clearing. Exact weekday subject allocation follows the finalized faculty timetable.'],
   ['Are mock tests and revision materials included?', 'The preparation includes topic-wise and subject/full-syllabus mock tests, along with study notes and revision materials for practice.'],
   ['How can I contact Radix Minds?', 'Call 9304829718 or email support@bootcamp.radixminds.in. You can also use the contact form to send a programme enquiry.'],
-  ['What are the fees and refund conditions?', 'The current fees are displayed on the relevant programme cards and detail pages using the programme data. Refund eligibility and request steps are set out in the Refund and Cancellation Policy. The first-seven-day prorated refund calculation remains subject to discussion; no calculation has been agreed.'],
 ]
 
 const programQuestions = [
