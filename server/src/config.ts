@@ -18,6 +18,31 @@ const razorpayMode = z.preprocess(
   value => typeof value === 'string' ? value.trim() || undefined : value,
   z.enum(['test', 'live']).default('test'),
 )
+const approvedNetlifyContext = z.preprocess(
+  value => typeof value === 'string' && value.trim() === '' ? undefined : value,
+  z.literal('deploy-preview').optional(),
+)
+
+function safeNetlifyMetadata(value: string | undefined) {
+  if (value === undefined || value === '') return 'unset'
+  return /^[A-Za-z0-9-]{1,64}$/.test(value) ? value : 'invalid'
+}
+
+const rawApprovedNetlifyContext = process.env.APPROVED_NETLIFY_CONTEXT
+const approvedNetlifyContextState = rawApprovedNetlifyContext === undefined
+  ? 'unset'
+  : rawApprovedNetlifyContext.trim() === ''
+    ? 'empty'
+    : rawApprovedNetlifyContext === 'deploy-preview'
+      ? 'deploy-preview'
+      : 'unexpected'
+if (process.env.NETLIFY === 'true' || process.env.AWS_LAMBDA_FUNCTION_NAME) {
+  console.info('[config] Netlify origin context', JSON.stringify({
+    CONTEXT: safeNetlifyMetadata(process.env.CONTEXT),
+    SITE_NAME: safeNetlifyMetadata(process.env.SITE_NAME),
+    APPROVED_NETLIFY_CONTEXT: approvedNetlifyContextState,
+  }))
+}
 
 export function isWebhookSecretReady(value: string | undefined) {
   return Boolean(value && value.trim().length >= webhookSecretMinimumLength)
@@ -40,7 +65,7 @@ const envSchema = z.object({
   // Set only in the Netlify Deploy Preview Functions scope. Netlify's runtime
   // SITE_NAME is checked alongside this explicit context marker before a
   // deployment-specific URL is accepted as a browser origin.
-  APPROVED_NETLIFY_CONTEXT: z.literal('deploy-preview').optional(),
+  APPROVED_NETLIFY_CONTEXT: approvedNetlifyContext,
   SUPABASE_URL: optional,
   SUPABASE_PUBLIC_KEY: optional,
   SUPABASE_SECRET_KEY: optional,
