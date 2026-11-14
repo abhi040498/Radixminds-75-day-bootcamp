@@ -1,4 +1,4 @@
-const productionSupabaseProjectRef = 'orkuiauxjlfexmntndim'
+export const productionSupabaseProjectRef = 'orkuiauxjlfexmntndim'
 
 function isCanonicalSupabaseProjectUrl(value) {
   if (typeof value !== 'string' || !value) return false

@@ -9,10 +9,12 @@ import { pathToFileURL } from 'node:url'
 import {
   createIsolatedTestChildEnv,
   isApprovedTestProjectUrl,
+  productionSupabaseProjectRef,
   validateTestApiEnvironment,
 } from './test-api-env.mjs'
 
 const syntheticTestUrl = 'https://example-test-project.supabase.co'
+const productionSupabaseUrl = `https://${productionSupabaseProjectRef}.supabase.co`
 const validEnv = {
   SUPABASE_URL: syntheticTestUrl,
   RADIXMINDS_TEST_SUPABASE_URL: syntheticTestUrl,
@@ -34,7 +36,7 @@ test('accepts only the exact approved HTTPS test URL', () => {
 })
 
 for (const [label, url] of [
-  ['production URL', 'https://orkuiauxjlfexmntndim.supabase.co'],
+  ['production URL', productionSupabaseUrl],
   ['HTTP URL', 'http://example-test-project.supabase.co'],
   ['wrong hostname', 'https://other-project.supabase.co'],
   ['embedded credentials', 'https://user:password@example-test-project.supabase.co'],
@@ -54,14 +56,14 @@ test('rejects a missing, malformed, or mismatched runtime test URL', () => {
   assert.equal(isApprovedTestProjectUrl(syntheticTestUrl, undefined), false)
   assert.equal(isApprovedTestProjectUrl(syntheticTestUrl, 'not a URL'), false)
   assert.equal(isApprovedTestProjectUrl('https://another-project.supabase.co', syntheticTestUrl), false)
-  assert.equal(isApprovedTestProjectUrl('https://orkuiauxjlfexmntndim.supabase.co', 'https://orkuiauxjlfexmntndim.supabase.co'), false)
+  assert.equal(isApprovedTestProjectUrl(productionSupabaseUrl, productionSupabaseUrl), false)
   assert.throws(() => validateTestApiEnvironment({ ...validEnv, RADIXMINDS_TEST_SUPABASE_URL: '' }))
 })
 
 test('forces both gates off and removes inherited production credentials', () => {
   const parentEnv = {
     PATH: 'fixture-path',
-    SUPABASE_URL: 'https://orkuiauxjlfexmntndim.supabase.co',
+    SUPABASE_URL: productionSupabaseUrl,
     SUPABASE_PUBLIC_KEY: 'production-public-fixture',
     SUPABASE_SECRET_KEY: 'production-secret-fixture',
     SUPABASE_SERVICE_ROLE_KEY: 'production-service-fixture',
