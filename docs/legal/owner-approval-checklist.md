@@ -1,7 +1,7 @@
 # Policy publication and enrolment checklist
 
-**Owner approval:** Confirmed 6 November 2026.  
-**Document status:** The Terms & Conditions, Privacy Policy and Refund & Cancellation Policy are marked OWNER-APPROVED and use the effective date 6 November 2026.
+**Owner approval:** Confirmed 6 November 2026; Privacy Policy infrastructure disclosure amendment approved 14 November 2026.  
+**Document status:** The Terms & Conditions and Refund & Cancellation Policy retain their owner-approved effective date of 6 November 2026. The Privacy Policy infrastructure disclosure is updated and approved as version 2026-11-14.
 
 ## Confirmed business identity
 
@@ -22,6 +22,7 @@
 ## Technical acceptance records
 
 - Public enrolment requires the single unchecked acknowledgement covering the Terms, Privacy Policy and Refund & Cancellation Policy. WhatsApp communication consent remains a separate optional, unchecked choice.
-- The application records each approved policy version and timestamp through the enrolment database RPC.
+- The application records each accepted policy version and timestamp through the enrolment database RPC.
+- Frontend and backend policy-version constants must remain synchronized; the Privacy Policy version is 2026-11-14.
 - Historical guardian and policy data must be preserved. New standard enrolments do not collect guardian details or record guardian consent.
 - Razorpay live payments remain outside this policy update.
