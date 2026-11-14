@@ -45,6 +45,35 @@ function inspectConfiguration(webhookSecret, functionRuntime = false, razorpayMo
   }
 }
 
+function inspectApprovedNetlifyContext({ present = true, value, netlifyRuntime = false } = {}) {
+  const directory = mkdtempSync(join(os.tmpdir(), 'radixminds-netlify-context-test-'))
+  try {
+    const source = `import { config } from ${JSON.stringify(configUrl)}; console.log(JSON.stringify({ approvedNetlifyContext: config.APPROVED_NETLIFY_CONTEXT }))`
+    const env = {
+      PATH: process.env.PATH,
+      SystemRoot: process.env.SystemRoot,
+      TEMP: process.env.TEMP,
+      TMP: process.env.TMP,
+      DOTENV_CONFIG_PATH: join(directory, 'does-not-exist'),
+      NODE_ENV: 'test',
+      CONTEXT: 'deploy-preview',
+      SITE_NAME: 'rm75daysbootcamp',
+      ...(present ? { APPROVED_NETLIFY_CONTEXT: value } : {}),
+      ...(netlifyRuntime ? { NETLIFY: 'true' } : {}),
+    }
+    const result = spawnSync(process.execPath, ['--import', 'tsx', '--input-type=module', '-e', source], {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+      env,
+    })
+    if (result.status !== 0) return { status: result.status, config: null, logs: `${result.stdout}${result.stderr}` }
+    const output = result.stdout.trim().split(/\r?\n/).at(-1)
+    return { status: result.status, config: JSON.parse(output), logs: result.stdout }
+  } finally {
+    rmSync(directory, { recursive: true, force: true })
+  }
+}
+
 function inspectAppOrigin(appOrigin) {
   const directory = mkdtempSync(join(os.tmpdir(), 'radixminds-origin-test-'))
   try {
@@ -66,6 +95,49 @@ test('APP_ORIGIN canonicalizes a trailing slash and rejects paths, query strings
   assert.deepEqual(inspectAppOrigin(`${preview}/`), { status: 0, appOrigin: preview })
   for (const invalid of [`${preview}/api`, `${preview}/?x=1`, `${preview}/#section`, 'https://user:pass@example.invalid']) {
     assert.notEqual(inspectAppOrigin(invalid).status, 0, 'APP_ORIGIN must be an origin, not a URL path or credentialed URL')
+  }
+})
+
+test('APPROVED_NETLIFY_CONTEXT accepts absence and normalizes only empty strings', () => {
+  for (const [label, options] of [
+    ['absent', { present: false }],
+    ['empty', { value: '' }],
+    ['whitespace-only', { value: ' \t  ' }],
+  ]) {
+    const result = inspectApprovedNetlifyContext(options)
+    assert.equal(result.status, 0, `${label} context should allow configuration startup: ${result.logs}`)
+    assert.equal(result.config.approvedNetlifyContext, undefined, `${label} context should normalize to undefined`)
+  }
+})
+
+test('APPROVED_NETLIFY_CONTEXT accepts only the exact deploy-preview marker', () => {
+  const accepted = inspectApprovedNetlifyContext({ value: 'deploy-preview' })
+  assert.equal(accepted.status, 0, accepted.logs)
+  assert.equal(accepted.config.approvedNetlifyContext, 'deploy-preview')
+
+  for (const value of ['false', 'true', 'production', 'other-context']) {
+    const rejected = inspectApprovedNetlifyContext({ value })
+    assert.notEqual(rejected.status, 0, `${value} must remain invalid`)
+  }
+})
+
+test('Netlify startup diagnostic logs only context metadata and approved-marker state', () => {
+  for (const [value, expectedState] of [
+    [undefined, 'unset'],
+    ['', 'empty'],
+    [' \t ', 'empty'],
+    ['deploy-preview', 'deploy-preview'],
+    ['production', 'unexpected'],
+  ]) {
+    const result = inspectApprovedNetlifyContext({ present: value !== undefined, value, netlifyRuntime: true })
+    const diagnosticLine = result.logs.split(/\r?\n/).find(line => line.includes('[config] Netlify origin context'))
+    assert.ok(diagnosticLine, 'Netlify function startup should emit the diagnostic')
+    const diagnostic = JSON.parse(diagnosticLine.slice(diagnosticLine.indexOf('{')))
+    assert.deepEqual(Object.keys(diagnostic).sort(), ['APPROVED_NETLIFY_CONTEXT', 'CONTEXT', 'SITE_NAME'])
+    assert.equal(diagnostic.CONTEXT, 'deploy-preview')
+    assert.equal(diagnostic.SITE_NAME, 'rm75daysbootcamp')
+    assert.equal(diagnostic.APPROVED_NETLIFY_CONTEXT, expectedState)
+    if (value === 'production') assert.equal(diagnosticLine.includes('production'), false, 'unexpected raw marker must not be logged')
   }
 })
 
