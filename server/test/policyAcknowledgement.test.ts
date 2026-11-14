@@ -4,33 +4,20 @@ import { policyAcknowledgementSchema } from '../src/policyAcknowledgement.js'
 import { policyVersions } from '../src/policyVersions.js'
 
 const validAcknowledgement = {
-  termsAccepted: true,
-  privacyConsent: true,
-  refundPolicyAccepted: true,
-  communicationConsent: true,
+  policyAcknowledged: true,
   policyVersions,
 }
 
-test('accepts all current policy acknowledgements and versions', () => {
+test('accepts one current policy acknowledgement with all three versions', () => {
   assert.equal(policyAcknowledgementSchema.safeParse(validAcknowledgement).success, true)
 })
 
-test('rejects a missing Terms acknowledgement', () => {
-  const incomplete: Record<string, unknown> = { ...validAcknowledgement }
-  delete incomplete.termsAccepted
-  assert.equal(policyAcknowledgementSchema.safeParse(incomplete).success, false)
-})
-
-test('rejects a missing Privacy acknowledgement', () => {
-  const incomplete: Record<string, unknown> = { ...validAcknowledgement }
-  delete incomplete.privacyConsent
-  assert.equal(policyAcknowledgementSchema.safeParse(incomplete).success, false)
-})
-
-test('rejects a missing Refund acknowledgement', () => {
-  const incomplete: Record<string, unknown> = { ...validAcknowledgement }
-  delete incomplete.refundPolicyAccepted
-  assert.equal(policyAcknowledgementSchema.safeParse(incomplete).success, false)
+test('rejects a missing, false or legacy multi-checkbox acknowledgement', () => {
+  assert.equal(policyAcknowledgementSchema.safeParse({ ...validAcknowledgement, policyAcknowledged: false }).success, false)
+  const missing: Record<string, unknown> = { ...validAcknowledgement }
+  delete missing.policyAcknowledged
+  assert.equal(policyAcknowledgementSchema.safeParse(missing).success, false)
+  assert.equal(policyAcknowledgementSchema.safeParse({ ...validAcknowledgement, communicationConsent: true }).success, false)
 })
 
 test('rejects stale or client-invented policy versions', () => {

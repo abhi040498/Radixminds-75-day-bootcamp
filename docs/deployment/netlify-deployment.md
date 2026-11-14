@@ -7,7 +7,7 @@ This guide prepares the existing Radix Minds Vite + Express application for Netl
 - Vite builds the public React site to `dist/`.
 - Netlify publishes `dist/` as static assets.
 - The existing Express application is exported from `server/src/index.ts` without opening a listener.
-- `netlify/functions/api.ts` wraps that same Express app with `serverless-http`.
+- `netlify/functions/api.ts` adapts Netlify's typed Fetch `Request`/`Context` invocation to the Express app. It passes only validated `Context.ip` into the API Gateway event used by `serverless-http`; it never trusts forwarded host or client-IP headers.
 - The `/api/*` rewrite invokes the function, preserving the existing frontend `/api/v1/...` requests and backend routes.
 - The `/*` rewrite serves `index.html` for React Router paths and refreshes. The API rewrite is intentionally listed first.
 - Local and Hostinger Node startup remain available through `server/src/start.ts` and `npm start`.
@@ -29,44 +29,53 @@ The repository root is the Netlify base directory. Configure:
 
 ## Environment variables
 
-Set server variables in Netlify's site environment configuration. Do not put Supabase service-role or Razorpay secrets in Vite variables, browser code, or committed files. Do not copy secrets into Netlify automatically.
+Configure runtime variables in Netlify's protected environment settings, never in Vite-prefixed variables. Do not copy credentials automatically. Use separate values and contexts for deploy previews and production.
 
-Required/configurable server variable names:
+| Variable name | Purpose | Context | Visibility |
+|---|---|---|---|
+| `NODE_ENV` | Runtime mode | Deploy Preview, Production | Non-secret |
+| `APP_ORIGIN` | Exact allowed browser origin | Each context, matching that site URL | Non-secret |
+| `APPROVED_NETLIFY_CONTEXT` | Enables tightly scoped Deploy Preview origin matching | Deploy Previews only; set exactly to `deploy-preview`; leave unset in Production | Non-secret |
+| `SUPABASE_URL` | Supabase API endpoint | Each context | Public endpoint |
+| `SUPABASE_PUBLIC_KEY` | Supabase Auth public/anon key | Each context | Public key, restricted by RLS |
+| `SUPABASE_SECRET_KEY` or `SUPABASE_SERVICE_ROLE_KEY` | Privileged server-side database access (configure only one alias) | Each context | Secret; server only |
+| `STATUS_TOKEN_SECRET` | HMAC secret for enrolment status tokens | Each context | Secret |
+| `POLICIES_APPROVED` | Server-side policy/enrolment gate | Deploy Preview, Production | Non-secret; keep `false` until approved and verified |
+| `PAYMENT_ENABLED` | Server-side checkout gate | Deploy Preview, Production | Non-secret; keep `false` until separately approved |
+| `RAZORPAY_MODE` | Razorpay mode | Test context only initially | Non-secret setting |
+| `RAZORPAY_KEY_ID` | Checkout public key identifier | Test context only | Public identifier; never put in Vite config |
+| `RAZORPAY_KEY_SECRET` | Order/signature/refund authentication | Test context only | Secret; server only |
+| `RAZORPAY_WEBHOOK_SECRET` | Webhook HMAC verification | Test context only | Secret; server only |
+| `BOARD_OPTIONS` | Allowed student board values | Each context, optional | Non-secret |
+| `LANGUAGE_OPTIONS` | Allowed language values | Each context, optional | Non-secret |
+| `WHATSAPP_PHONE` | Support number in message drafts | Each context, optional | Public contact detail |
+| `TELEGRAM_URL` | Support link | Each context, optional | Public URL |
+| `PORT` | Persistent Node listener port | Local only; not used by Netlify Functions | Non-secret |
 
-- `NODE_ENV`
-- `APP_ORIGIN`
-- `SUPABASE_URL`
-- `SUPABASE_PUBLIC_KEY`
-- `SUPABASE_SECRET_KEY` (or the supported alias `SUPABASE_SERVICE_ROLE_KEY`)
-- `STATUS_TOKEN_SECRET`
-- `POLICIES_APPROVED`
-- `PAYMENT_ENABLED`
-- `BOARD_OPTIONS`
-- `LANGUAGE_OPTIONS`
-- `WHATSAPP_PHONE`
-- `TELEGRAM_URL`
+### Origin variables by Netlify context
 
-Sensitive values in `.env.example` are intentionally blank. Enter them only in Netlify's protected environment-variable settings; do not copy them into source files or documentation.
+- **Production:** set `APP_ORIGIN=https://bootcamp.radixminds.in`. Leave `APPROVED_NETLIFY_CONTEXT` unset. The API accepts the production custom domain only as this exact configured origin. A Netlify production hostname is accepted only when it is the exact configured production origin and its `SITE_NAME` matches the corresponding approved site.
+- **Deploy Preview:** set `APPROVED_NETLIFY_CONTEXT=deploy-preview` and set `APP_ORIGIN` to the stable alias belonging to the same Netlify site: `https://deploy-preview-1--radixminds75daysbootcamp.netlify.app` when `SITE_NAME=radixminds75daysbootcamp`, or `https://deploy-preview-1--rm75daysbootcamp.netlify.app` when `SITE_NAME=rm75daysbootcamp`. The function also checks Netlify's runtime `SITE_NAME` before allowing that site's valid immutable deployment URLs.
+- Netlify supplies `SITE_NAME` at runtime. Do not hardcode it in source, store it as a secret, or manually set it to make an origin pass. A site-name/origin mismatch fails closed. Never use wildcard origins.
 
-Netlify supplies the function runtime; `PORT` is for the local/Hostinger listener and is not required by the function. Razorpay variables are recognized by the existing application but must remain payment-disabled in this phase: `RAZORPAY_MODE`, `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, and `RAZORPAY_WEBHOOK_SECRET`.
+The Netlify function smoke test now blanks Supabase, Razorpay, and status-token variables before importing the function bundle; it runs offline. Do not use real credentials for that test.
 
-For the initial safe deployment configuration, use `POLICIES_APPROVED=false` and `PAYMENT_ENABLED=false`. Do not set them true to work around the server-side policy gate. The first-seven-day refund calculation remains an unresolved business decision.
+For public production with paid admissions still disabled, retain `POLICIES_APPROVED=false` and `PAYMENT_ENABLED=false`. Do not change either setting in this preparation task.
 
 ## Supabase and migrations
 
-Keep the existing Supabase project and server-side service-role access. Do not add a `VITE_` prefix to privileged credentials. This deployment configuration does not execute SQL or migrate data.
+Use the existing Supabase project and keep the service-role credential server-side. This run did not apply SQL. The WhatsApp consent migration and the new WhatsApp-number/policy-version and refund-workflow migrations require ordered validation on the isolated test project before they are considered ready for production. The currently linked project reference must be checked immediately before any remote command; the production reference is prohibited for these checks. Production migration history was not audited or changed during this run.
 
-The production project has two pending migrations, `202611050001` and `202611050002`. The first supplies the admin learning-mode filter RPC; the second supplies the webhook claim function and processing state used by the current backend. Reconcile these migrations through the reviewed Supabase migration process before relying on those features. Until then, admin filtering by learning mode and database-backed webhook processing are unavailable. The React/Vite build itself is independent of them.
+The frontend build does not require Supabase connectivity. Refund and alternate-WhatsApp database routes remain unavailable until their migrations are installed in the target database.
 
 ## Setup and temporary URL verification
 
-1. Confirm the intended GitHub repository and branch. Ensure `.env` and other secret files are not committed; `.gitignore` already excludes `.env` files.
-2. In Netlify, create a site by importing the repository from GitHub. Do not publish while reviewing the initial deploy settings.
-3. Set the repository root as the base directory and use the build settings above (also declared in `netlify.toml`).
-4. Add the environment-variable names and approved values in Netlify's environment settings. Keep policy approval and payment disabled. Enter secrets only in the dashboard; never paste them into source or this guide.
-5. Build a deploy preview or use `netlify dev` locally. With Netlify CLI installed, `netlify dev` runs the Vite site and functions using the repository configuration. Use only read-only endpoints for smoke checks until an isolated test Supabase project is configured.
-6. Verify the temporary `*.netlify.app` URL: homepage, legal routes, direct refresh on nested routes, `/api/health`, `/api/v1/config`, `/api/v1/programs`, admin unauthenticated denial, and API error handling. Do not create production enrolments or payment attempts.
-7. Verify that `POLICIES_APPROVED` and `PAYMENT_ENABLED` remain false in the function environment and that no service-role or payment secret appears in deployed assets or logs.
+1. In Netlify, confirm the existing site is connected to `abhi040498/Radixminds-75-day-bootcamp` and the intended branch. Do not change repository settings or publish from this task.
+2. Confirm root base directory, build command `npm run build:netlify`, publish directory `dist`, and functions directory `netlify/functions`.
+3. Enter only the isolated TEST project URL and test-only credentials in the Deploy Preview context after verifying their source. Keep production-context secrets separate; do not copy Test Mode secrets to Production.
+4. Create a deploy preview. Verify homepage, legal routes, direct refresh on nested routes, `/api/health`, `/api/v1/config`, `/api/v1/programs`, and unauthenticated admin denial. Use a test-project-only API environment; never run database-backed smoke tests against production.
+5. Run the isolated integration and consent/refund migration checks after the migration order and project reference are reviewed. No student/payment fixture should be created outside those approved tests.
+6. Before any production deployment, separately authorize and verify migration state, secrets, `APP_ORIGIN`, admin access, both gates, webhook configuration, and rollback path. This guide does not authorize those changes.
 
 The Netlify Express integration uses a serverless invocation rather than a permanently running Node process. Function instances may start cold, and process-local rate-limit counters are not a shared persistent store across instances; treat them as best-effort and review abuse controls before opening public enrolment.
 
@@ -90,11 +99,9 @@ The Razorpay webhook must finish synchronously and acknowledge only after proces
 3. Recheck the temporary/custom URL, API health, config, and program routes.
 4. Do not roll back by resetting Supabase or deleting student records. No database rollback is part of this Netlify process.
 
-## Explicitly not performed
+## Current implementation status
 
-- No Netlify site was created or published.
-- No GitHub repository was connected.
-- No secrets were transferred.
-- No custom domain, DNS, or SSL configuration was changed.
-- No Supabase migrations or production data were changed.
-- Enrolment and payment gates were not changed.
+- The website is already deployed according to the site owner; this task did not inspect or alter Netlify's live configuration.
+- No deploy was triggered, no secrets were transferred, and no domain, DNS, or SSL setting was changed.
+- No migration was applied. The local Netlify function smoke-test script is explicitly offline.
+- The production payment and policy gates were not changed.

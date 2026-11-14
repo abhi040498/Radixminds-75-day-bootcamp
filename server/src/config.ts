@@ -2,6 +2,16 @@ import 'dotenv/config'
 import { z } from 'zod'
 
 const optional = z.string().trim().optional().transform(value => value || undefined)
+const appOrigin = z.string().url()
+  .refine(value => {
+    const parsed = new URL(value)
+    return (parsed.protocol === 'http:' || parsed.protocol === 'https:')
+      && !parsed.username && !parsed.password
+      && parsed.pathname === '/' && !parsed.search && !parsed.hash
+  }, 'APP_ORIGIN must be an HTTP(S) origin without a path, query or fragment.')
+  // Origin headers never contain a trailing slash. Canonicalize configured
+  // origins once so CORS and CSRF checks compare the same representation.
+  .transform(value => new URL(value).origin)
 const statusSecret = optional.refine(value => !value || value.length >= 32, 'STATUS_TOKEN_SECRET must have at least 32 characters.')
 const webhookSecretMinimumLength = 24
 const razorpayMode = z.preprocess(
@@ -26,7 +36,11 @@ if (process.env.NETLIFY === 'true' || process.env.AWS_LAMBDA_FUNCTION_NAME) {
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().min(1).max(65535).default(4000),
-  APP_ORIGIN: z.string().url().default('http://localhost:5173'),
+  APP_ORIGIN: appOrigin.default('http://localhost:5173'),
+  // Set only in the Netlify Deploy Preview Functions scope. Netlify's runtime
+  // SITE_NAME is checked alongside this explicit context marker before a
+  // deployment-specific URL is accepted as a browser origin.
+  APPROVED_NETLIFY_CONTEXT: z.literal('deploy-preview').optional(),
   SUPABASE_URL: optional,
   SUPABASE_PUBLIC_KEY: optional,
   SUPABASE_SECRET_KEY: optional,

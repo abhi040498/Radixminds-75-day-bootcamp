@@ -8,9 +8,6 @@ export const policyVersionsSchema = z.object({
 }).strict()
 
 export const policyAcknowledgementSchema = z.object({
-  termsAccepted: z.literal(true),
-  privacyConsent: z.literal(true),
-  refundPolicyAccepted: z.literal(true),
-  communicationConsent: z.literal(true),
+  policyAcknowledged: z.literal(true),
   policyVersions: policyVersionsSchema,
-})
+}).strict()

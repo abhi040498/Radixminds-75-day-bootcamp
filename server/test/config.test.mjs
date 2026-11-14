@@ -45,6 +45,30 @@ function inspectConfiguration(webhookSecret, functionRuntime = false, razorpayMo
   }
 }
 
+function inspectAppOrigin(appOrigin) {
+  const directory = mkdtempSync(join(os.tmpdir(), 'radixminds-origin-test-'))
+  try {
+    const source = `import { config } from ${JSON.stringify(configUrl)}; console.log(JSON.stringify({ appOrigin: config.APP_ORIGIN }))`
+    const result = spawnSync(process.execPath, ['--import', 'tsx', '--input-type=module', '-e', source], {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+      env: { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot, TEMP: process.env.TEMP, TMP: process.env.TMP, DOTENV_CONFIG_PATH: join(directory, 'does-not-exist'), NODE_ENV: 'test', APP_ORIGIN: appOrigin },
+    })
+    const output = result.stdout.trim().split(/\r?\n/).at(-1)
+    return { status: result.status, appOrigin: result.status === 0 ? JSON.parse(output).appOrigin : null }
+  } finally {
+    rmSync(directory, { recursive: true, force: true })
+  }
+}
+
+test('APP_ORIGIN canonicalizes a trailing slash and rejects paths, query strings and fragments', () => {
+  const preview = 'https://deploy-preview-1--radixminds75daysbootcamp.netlify.app'
+  assert.deepEqual(inspectAppOrigin(`${preview}/`), { status: 0, appOrigin: preview })
+  for (const invalid of [`${preview}/api`, `${preview}/?x=1`, `${preview}/#section`, 'https://user:pass@example.invalid']) {
+    assert.notEqual(inspectAppOrigin(invalid).status, 0, 'APP_ORIGIN must be an origin, not a URL path or credentialed URL')
+  }
+})
+
 test('missing, empty, whitespace-only and short webhook secrets keep checkout closed', () => {
   for (const [label, secret] of [
     ['missing', undefined],
@@ -77,7 +101,7 @@ test('invalid webhook configuration returns 503 before signature verification', 
   const directory = mkdtempSync(join(os.tmpdir(), 'radixminds-webhook-route-test-'))
   try {
     const functionUrl = pathToFileURL(resolve('netlify/functions/api.ts')).href
-    const source = `import { handler } from ${JSON.stringify(functionUrl)}; const response = await handler({ httpMethod: 'POST', path: '/api/v1/webhooks/razorpay', headers: { 'content-type': 'application/json', 'x-razorpay-signature': 'invalid' }, body: 'not-json', isBase64Encoded: false, requestContext: { identity: { sourceIp: '127.0.0.1' } } }, {}); console.log(JSON.stringify({ statusCode: response.statusCode, body: response.body }))`
+    const source = `import handler from ${JSON.stringify(functionUrl)}; const response = await handler(new Request('https://bootcamp.radixminds.in/api/v1/webhooks/razorpay', { method: 'POST', headers: { 'content-type': 'application/json', 'x-razorpay-signature': 'invalid' }, body: 'not-json' }), { ip: '127.0.0.1' }); console.log(JSON.stringify({ statusCode: response.status, body: await response.text() }))`
     const result = spawnSync(process.execPath, ['--import', 'tsx', '--input-type=module', '-e', source], {
       cwd: process.cwd(),
       encoding: 'utf8',
@@ -88,7 +112,7 @@ test('invalid webhook configuration returns 503 before signature verification', 
         TMP: process.env.TMP,
         DOTENV_CONFIG_PATH: join(directory, 'does-not-exist'),
         NODE_ENV: 'test',
-        APP_ORIGIN: 'https://example-test-project.netlify.app',
+        APP_ORIGIN: 'https://bootcamp.radixminds.in',
         SUPABASE_URL: 'https://example-test-project.supabase.co',
         SUPABASE_SECRET_KEY: 'synthetic-database-secret-fixture',
         RAZORPAY_KEY_ID: 'rzp_test_syntheticfixture',
@@ -103,6 +127,163 @@ test('invalid webhook configuration returns 503 before signature verification', 
     assert.equal(result.status, 0, 'the isolated function request should complete')
     const output = result.stdout.trim().split(/\r?\n/).at(-1)
     assert.equal(JSON.parse(output).statusCode, 503, 'invalid configuration must be rejected before the invalid signature/body reaches the webhook handler')
+  } finally {
+    rmSync(directory, { recursive: true, force: true })
+  }
+})
+
+test('enrolment submission fails closed before database access when the status-token secret is missing', () => {
+  const directory = mkdtempSync(join(os.tmpdir(), 'radixminds-enrolment-secret-test-'))
+  try {
+    const functionUrl = pathToFileURL(resolve('netlify/functions/api.ts')).href
+    const source = `
+      let fetchCalls = 0;
+      globalThis.fetch = async (input) => {
+        fetchCalls++;
+        const url = new URL(typeof input === 'string' ? input : input.url);
+        if (url.pathname !== '/rest/v1/programs') throw new Error('Unexpected synthetic database request');
+        return Response.json([{
+          id: '00000000-0000-4000-8000-000000000010', code: 'class-10', name: 'Synthetic Class 10',
+          duration_days: 75, subjects: ['Mathematics','Science','Social Science','English'],
+          program_fee_paise: 249900, standard_fee_paise: null, discount_percent: null,
+          offer_valid_until: null, currency: 'INR', is_active: true, enrolment_open: true,
+          program_learning_modes: [{ mode: 'online', label: 'Online', is_available: true, batch_label: null }]
+        }]);
+      };
+      const handlerModule = await import(${JSON.stringify(functionUrl)});
+      const response = await handlerModule.default(new Request('https://bootcamp.radixminds.in/api/v1/enrolments', {
+        method: 'POST',
+        headers: {
+          origin: 'https://bootcamp.radixminds.in',
+          'sec-fetch-site': 'same-origin', 'content-type': 'application/json',
+          'idempotency-key': '00000000-0000-4000-8000-000000000099'
+        },
+        body: JSON.stringify({
+          programCode: 'class-10', fullName: 'Synthetic Fixture Student', mobile: '9876543210',
+          email: 'fixture@example.invalid', dateOfBirth: '', board: 'CBSE', schoolName: 'Synthetic School',
+          preferredLanguage: 'English', subjectChoice: null, learningMode: 'online',
+          whatsappUpdatesConsent: false, whatsappMobile: '', policyAcknowledged: true,
+          policyVersions: { terms: '2026-11-10', privacy: '2026-11-10', refund: '2026-11-10' }
+        }),
+      }), { ip: '127.0.0.1' });
+      console.log(JSON.stringify({ statusCode: response.status, body: await response.text(), fetchCalls }));
+    `
+    const result = spawnSync(process.execPath, ['--import', 'tsx', '--input-type=module', '-e', source], {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+      env: {
+        PATH: process.env.PATH,
+        SystemRoot: process.env.SystemRoot,
+        TEMP: process.env.TEMP,
+        TMP: process.env.TMP,
+        DOTENV_CONFIG_PATH: join(directory, 'does-not-exist'),
+        NODE_ENV: 'test',
+        APP_ORIGIN: 'https://bootcamp.radixminds.in',
+        SUPABASE_URL: 'http://127.0.0.1:54321',
+        SUPABASE_SECRET_KEY: 'synthetic-database-secret-fixture',
+        RAZORPAY_KEY_ID: 'rzp_test_syntheticfixture',
+        RAZORPAY_KEY_SECRET: 'synthetic-razorpay-secret-fixture',
+        PAYMENT_ENABLED: 'true',
+        POLICIES_APPROVED: 'true',
+        RAZORPAY_MODE: 'test',
+      },
+    })
+    assert.equal(result.status, 0, 'the isolated function request should complete')
+    const output = result.stdout.trim().split(/\r?\n/).at(-1)
+    const response = JSON.parse(output)
+    assert.equal(response.statusCode, 503, 'missing status-token configuration must not become an unhandled 500')
+    assert.equal(JSON.parse(response.body).error.code, 'REGISTRATION_NOT_CONFIGURED')
+    assert.equal(response.fetchCalls, 0, 'the request must fail before any Supabase operation')
+    assert.equal(response.body.includes('Synthetic Fixture Student'), false)
+    assert.equal(response.body.includes('fixture@example.invalid'), false)
+  } finally {
+    rmSync(directory, { recursive: true, force: true })
+  }
+})
+
+test('enrolment RPC errors log only sanitized diagnostics and preserve the safe 503 response', () => {
+  const directory = mkdtempSync(join(os.tmpdir(), 'radixminds-enrolment-rpc-log-test-'))
+  try {
+    const functionUrl = pathToFileURL(resolve('netlify/functions/api.ts')).href
+    const source = `
+      let diagnostic = null;
+      let fetchCalls = 0;
+      console.error = (event, fields) => { if (event === 'api_enrolment_rpc_error') diagnostic = fields; };
+      globalThis.fetch = async (input) => {
+        fetchCalls++;
+        const url = new URL(typeof input === 'string' ? input : input.url);
+        if (url.pathname === '/rest/v1/programs') return Response.json([{
+          id: '00000000-0000-4000-8000-000000000010', code: 'class-10', name: 'Synthetic Class 10',
+          duration_days: 75, subjects: ['Mathematics','Science','Social Science','English'],
+          program_fee_paise: 249900, standard_fee_paise: null, discount_percent: null,
+          offer_valid_until: null, currency: 'INR', is_active: true, enrolment_open: true,
+          program_learning_modes: [{ mode: 'online', label: 'Online', is_available: true, batch_label: null }]
+        }]);
+        if (url.pathname === '/rest/v1/rpc/create_pending_enrolment') return Response.json({
+          code: 'P0001 CODE_CANARY', name: 'PostgrestError', message: 'SUPABASE_MESSAGE_CANARY',
+          details: 'SUPABASE_DETAILS_CANARY', hint: 'SUPABASE_HINT_CANARY',
+          query: 'SELECT_SQL_CANARY', token: 'TOKEN_CANARY'
+        }, { status: 400 });
+        throw new Error('Unexpected synthetic fetch path');
+      };
+      const handlerModule = await import(${JSON.stringify(functionUrl)});
+      const response = await handlerModule.default(new Request('https://bootcamp.radixminds.in/api/v1/enrolments', {
+        method: 'POST', headers: {
+          origin: 'https://bootcamp.radixminds.in',
+          'sec-fetch-site': 'same-origin', 'content-type': 'application/json',
+          'idempotency-key': '00000000-0000-4000-8000-000000000099'
+        },
+        body: JSON.stringify({
+          programCode: 'class-10', fullName: 'STUDENT_DATA_CANARY', mobile: '9876543210',
+          email: 'EMAIL_DATA_CANARY@example.invalid', dateOfBirth: '', board: 'CBSE', schoolName: 'SCHOOL_DATA_CANARY',
+          preferredLanguage: 'English', subjectChoice: null, learningMode: 'online',
+          whatsappUpdatesConsent: false, whatsappMobile: '', policyAcknowledged: true,
+          policyVersions: { terms: '2026-11-10', privacy: '2026-11-10', refund: '2026-11-10' }
+        }),
+      }), { ip: '127.0.0.1' });
+      console.log(JSON.stringify({ statusCode: response.status, body: await response.text(), diagnostic, fetchCalls }));
+    `
+    const result = spawnSync(process.execPath, ['--import', 'tsx', '--input-type=module', '-e', source], {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+      env: {
+        PATH: process.env.PATH,
+        SystemRoot: process.env.SystemRoot,
+        TEMP: process.env.TEMP,
+        TMP: process.env.TMP,
+        DOTENV_CONFIG_PATH: join(directory, 'does-not-exist'),
+        NODE_ENV: 'test',
+        APP_ORIGIN: 'https://bootcamp.radixminds.in',
+        SUPABASE_URL: 'http://127.0.0.1:54321',
+        SUPABASE_SECRET_KEY: 'synthetic-database-secret-fixture',
+        RAZORPAY_KEY_ID: 'rzp_test_syntheticfixture',
+        RAZORPAY_KEY_SECRET: 'synthetic-razorpay-secret-fixture',
+        RAZORPAY_WEBHOOK_SECRET: 'synthetic-webhook-secret-fixture-long-enough',
+        STATUS_TOKEN_SECRET: 'synthetic-status-token-secret-fixture-long-enough',
+        PAYMENT_ENABLED: 'true',
+        POLICIES_APPROVED: 'true',
+        RAZORPAY_MODE: 'test',
+      },
+    })
+    assert.equal(result.status, 0, 'the isolated function request should complete')
+    const combinedLogs = `${result.stdout}${result.stderr}`
+    const output = result.stdout.trim().split(/\r?\n/).at(-1)
+    const resultJson = JSON.parse(output)
+    const body = JSON.parse(resultJson.body)
+    assert.equal(resultJson.statusCode, 503)
+    assert.equal(body.error.code, 'REGISTRATION_SAVE_FAILED')
+    assert.equal(resultJson.fetchCalls, 2, 'the test should reach the mocked program read and enrolment RPC only')
+    assert.deepEqual(Object.keys(resultJson.diagnostic).sort(), ['httpStatus', 'operation', 'requestId', 'supabaseErrorCode', 'supabaseErrorName'].sort())
+    assert.match(resultJson.diagnostic.requestId, /^[0-9a-f-]{36}$/i)
+    assert.equal(resultJson.diagnostic.operation, 'create_pending_enrolment')
+    assert.equal(resultJson.diagnostic.supabaseErrorCode, 'unknown', 'malformed provider codes must be sanitized')
+    assert.match(resultJson.diagnostic.supabaseErrorName, /^(?:[A-Za-z][A-Za-z0-9]{0,39}|unknown)$/)
+    assert.equal(resultJson.diagnostic.httpStatus, 503)
+    assert.equal(body.error.requestId, resultJson.diagnostic.requestId)
+    for (const canary of [
+      'SUPABASE_MESSAGE_CANARY', 'SUPABASE_DETAILS_CANARY', 'SUPABASE_HINT_CANARY',
+      'SELECT_SQL_CANARY', 'TOKEN_CANARY', 'CODE_CANARY', 'STUDENT_DATA_CANARY', 'EMAIL_DATA_CANARY', 'SCHOOL_DATA_CANARY',
+    ]) assert.equal(combinedLogs.includes(canary), false, `${canary} must not be logged or returned`)
   } finally {
     rmSync(directory, { recursive: true, force: true })
   }

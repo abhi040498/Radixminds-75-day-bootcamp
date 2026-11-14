@@ -34,6 +34,7 @@ for (const name of [
   'SUPABASE_URL', 'SUPABASE_PUBLIC_KEY', 'SUPABASE_SECRET_KEY', 'SUPABASE_SERVICE_ROLE_KEY',
   'RAZORPAY_KEY_ID', 'RAZORPAY_KEY_SECRET', 'RAZORPAY_WEBHOOK_SECRET', 'STATUS_TOKEN_SECRET',
 ]) delete process.env[name]
+for (const name of ['APPROVED_NETLIFY_CONTEXT', 'SITE_NAME', 'NETLIFY', 'AWS_LAMBDA_FUNCTION_NAME']) delete process.env[name]
 process.env.DOTENV_CONFIG_PATH = join(tmpdir(), `radixminds-offline-no-env-${process.pid}.env`)
 Object.assign(process.env, {
   NODE_ENV: 'test',
@@ -46,10 +47,12 @@ Object.assign(process.env, {
 const { default: handler } = require(fileURLToPath(bundlePath))
 if (typeof handler !== 'function') throw new Error('Netlify function bundle has no default Fetch handler.')
 
-function makeRequest(path, { method = 'GET', origin = process.env.APP_ORIGIN, ip, forwardedFor, body, requestId } = {}) {
+function makeRequest(path, { method = 'GET', origin = process.env.APP_ORIGIN, ip, forwardedFor, body, requestId, preflightMethod, preflightHeaders } = {}) {
   const headers = new Headers()
   if (origin !== undefined) headers.set('origin', origin)
   if (forwardedFor !== undefined) headers.set('x-forwarded-for', forwardedFor)
+  if (preflightMethod !== undefined) headers.set('access-control-request-method', preflightMethod)
+  if (preflightHeaders !== undefined) headers.set('access-control-request-headers', preflightHeaders)
   if (body !== undefined) headers.set('content-type', 'application/json')
   if (requestId) headers.set('x-request-id', requestId)
   const request = new Request(`https://bootcamp.radixminds.in${path}`, {
@@ -86,6 +89,48 @@ async function runClosedGateCases() {
   const programs = await makeRequest('/api/v1/programs', { ip: '203.0.113.10' })
   if (programs.status !== 503) throw new Error(`Programs endpoint returned unexpected HTTP ${programs.status} without database configuration.`)
 
+  const preflight = await makeRequest('/api/v1/enrolments', {
+    method: 'OPTIONS',
+    ip: '203.0.113.10',
+    preflightMethod: 'POST',
+    preflightHeaders: 'content-type,idempotency-key,x-enrolment-token',
+  })
+  if (preflight.status !== 204
+    || preflight.headers.get('access-control-allow-origin') !== process.env.APP_ORIGIN
+    || preflight.headers.get('access-control-allow-credentials') !== 'true'
+    || !preflight.headers.get('access-control-allow-headers')?.toLowerCase().split(',').map(value => value.trim()).includes('x-enrolment-token')) {
+    throw new Error('Credentialed OPTIONS preflight did not preserve the exact configured origin.')
+  }
+  const rejectedPreflight = await makeRequest('/api/v1/enrolments', {
+    method: 'OPTIONS',
+    origin: 'https://attacker.example.invalid',
+    ip: '203.0.113.10',
+    preflightMethod: 'PUT',
+    preflightHeaders: 'content-type',
+  })
+  if (rejectedPreflight.headers.get('access-control-allow-origin')) {
+    throw new Error('CORS granted permission to an unapproved origin.')
+  }
+
+  for (const [path, method] of [
+    ['/api/v1/enrolment-draft', 'GET'],
+    ['/api/v1/enrolment-draft/session', 'POST'],
+    ['/api/v1/enrolment-draft', 'PUT'],
+    ['/api/v1/enrolment-draft', 'DELETE'],
+  ]) {
+    const response = await makeRequest(path, { method, ip: '203.0.113.10', ...(method === 'GET' ? {} : { body: '{}' }) })
+    if (response.status !== 404) throw new Error(`Removed draft route ${method} ${path} returned ${response.status}, expected 404.`)
+  }
+
+  const orderGate = await makeRequest('/api/v1/enrolments/RM-AAAAAAAAAAAAAAAAAAAA/payment-orders', { method: 'POST', ip: '203.0.113.10', body: '{}' })
+  // With Supabase deliberately absent, the route fails at its database
+  // prerequisite before evaluating the Razorpay configuration gate.
+  await assertJsonResponse(orderGate, 503, 'CONFIGURATION_REQUIRED', 'payment-order database prerequisite')
+  const verifyGate = await makeRequest('/api/v1/payments/verify', { method: 'POST', ip: '203.0.113.10', body: '{}' })
+  await assertJsonResponse(verifyGate, 503, 'PAYMENT_NOT_CONFIGURED', 'closed payment-verification gate')
+  const unsignedWebhook = await makeRequest('/api/v1/webhooks/razorpay', { method: 'POST', ip: '203.0.113.10', body: '{"event":"payment.captured","payload":{}}' })
+  if (unsignedWebhook.status !== 503) throw new Error(`Unsigned webhook was not rejected while unconfigured: HTTP ${unsignedWebhook.status}.`)
+
   // The origin guard remains first; a closed policy must not weaken CSRF checks.
   await assertJsonResponse(
     await makeRequest('/api/v1/enrolments', { method: 'POST', origin: 'https://unapproved.invalid', ip: '203.0.113.10', body: '{}' }),
@@ -103,7 +148,6 @@ async function runClosedGateCases() {
     503, 'POLICIES_NOT_APPROVED', 'closed policy with platform IP',
   )
 
-  const requestId = 'cc7313ab-107f-45e7-9747-c1d3a0f88b72'
   const bodyMarker = 'PRIVATE_BODY_MARKER_DO_NOT_LOG'
   const captured = []
   const originalError = console.error
@@ -111,16 +155,18 @@ async function runClosedGateCases() {
   let malformed
   try {
     malformed = await makeRequest('/api/v1/enrolments', {
-      method: 'POST', ip: '203.0.113.12', requestId,
+      method: 'POST', ip: '203.0.113.12',
       body: `{"marker":"${bodyMarker}",`,
     })
   } finally {
     console.error = originalError
   }
-  if (malformed.status !== 500) throw new Error(`Malformed JSON expected HTTP 500; received ${malformed.status}.`)
+  if (malformed.status !== 400) throw new Error(`Malformed JSON expected HTTP 400; received ${malformed.status}.`)
+  const requestId = malformed.headers.get('x-request-id')
+  if (!requestId) throw new Error('Malformed JSON response is missing its server-generated request ID.')
   const logText = JSON.stringify(captured)
   const publicText = await malformed.text()
-  if (!logText.includes(requestId) || !logText.includes('errorName') || !logText.includes('stackFrames')) {
+  if (!logText.includes(requestId) || !logText.includes('name') || !logText.includes('stackFrames')) {
     throw new Error('Safe error log is missing request-correlated diagnostic fields.')
   }
   if (logText.includes(bodyMarker) || publicText.includes(bodyMarker) || publicText.includes('stackFrames')) {
@@ -131,6 +177,7 @@ async function runClosedGateCases() {
     throw new Error('Error log stack frames are not bounded.')
   }
   console.log('Closed policy: missing/valid IP -> 503 POLICIES_NOT_APPROVED; wrong Origin -> 403; error logs stay sanitized.')
+  console.log('Legacy offline smoke checks: exact-origin CORS, removed draft routes, payment gates, webhook rejection, and program unavailability passed.')
 }
 
 async function runOpenGateCases() {

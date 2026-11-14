@@ -8,12 +8,13 @@ const orderId = 'order_test_123456'
 const paymentId = 'pay_test_123456'
 const amountPaise = 249900
 
-type EventRow = { id: string; state: 'processing' | 'processed' | 'ignored' | 'error' }
+type EventRow = { id: string; state: 'processing' | 'processed' | 'ignored' | 'error'; token?: string }
 
 class FakeStore implements RazorpayWebhookStore {
   readonly events = new Map<string, EventRow>()
   readonly failedPayments = new Set<string>()
   readonly capturedOrders = new Map<string, { paymentId: string; amount: number; currency: string }>()
+  readonly reviewOrders = new Set<string>()
   captureRpcCalls = 0
   failureNextCapture = false
   failNextClaim = false
@@ -28,32 +29,41 @@ class FakeStore implements RazorpayWebhookStore {
     if (existing?.state === 'processing') return { state: 'busy' }
     const event = existing ?? { id: `evt-row-${this.events.size + 1}`, state: 'processing' as const }
     event.state = 'processing'
+    event.token = input.leaseToken
     this.events.set(input.eventId, event)
-    return { state: 'claimed', eventRowId: event.id }
+    return { state: 'claimed', eventRowId: event.id, leaseToken: input.leaseToken }
   }
 
-  async markEvent(eventRowId: string, status: 'processed' | 'ignored' | 'error'): Promise<void> {
-    const event = [...this.events.values()].find(row => row.id === eventRowId)
-    assert.ok(event)
-    event.state = status
-  }
-
-  async confirmCaptured(input: { orderId: string; paymentId: string; amountPaise: number; currency: string }): Promise<void> {
-    if (this.failureNextCapture) {
-      this.failureNextCapture = false
-      throw new Error('simulated confirm RPC failure')
+  async processEvent(input: Parameters<RazorpayWebhookStore['processEvent']>[0]): Promise<void> {
+    const event = [...this.events.values()].find(row => row.id === input.eventRowId)
+    if (!event || event.state !== 'processing' || event.token !== input.leaseToken) throw new Error('lease_lost')
+    if (input.action === 'captured') {
+      if (this.failureNextCapture) {
+        this.failureNextCapture = false
+        throw new Error('simulated confirm RPC failure')
+      }
+      if (input.orderId !== orderId) throw new Error('order_mismatch')
+      if (input.amountPaise !== amountPaise || input.currency !== 'INR') {
+        this.reviewOrders.add(input.orderId!)
+      } else {
+        const prior = this.capturedOrders.get(input.orderId!)
+        if (!prior) {
+          this.captureRpcCalls += 1
+          this.capturedOrders.set(input.orderId!, { paymentId: input.paymentId!, amount: input.amountPaise!, currency: input.currency! })
+        } else if (prior.paymentId !== input.paymentId) throw new Error('payment_mismatch')
+      }
+    } else if (input.action === 'failed') {
+      if (!this.capturedOrders.has(input.orderId!)) this.failedPayments.add(input.paymentId!)
     }
-    const prior = this.capturedOrders.get(input.orderId)
-    if (prior) {
-      assert.deepEqual(prior, { paymentId: input.paymentId, amount: input.amountPaise, currency: input.currency })
-      return
-    }
-    this.captureRpcCalls += 1
-    this.capturedOrders.set(input.orderId, { paymentId: input.paymentId, amount: input.amountPaise, currency: input.currency })
+    event.state = input.action === 'ignored' ? 'ignored' : 'processed'
+    event.token = undefined
   }
 
-  async markFailed(input: { orderId: string; paymentId: string }): Promise<void> {
-    if (!this.capturedOrders.has(input.orderId)) this.failedPayments.add(input.paymentId)
+  async releaseEvent(input: Parameters<RazorpayWebhookStore['releaseEvent']>[0]): Promise<void> {
+    const event = [...this.events.values()].find(row => row.id === input.eventRowId)
+    if (!event || event.state !== 'processing' || event.token !== input.leaseToken) throw new Error('lease_lost')
+    event.state = 'error'
+    event.token = undefined
   }
 }
 
@@ -63,8 +73,8 @@ function signedRequest(event: string, eventId: string, payload: unknown) {
   return { rawBody, signature, eventId }
 }
 
-function capturedPayment() {
-  return { payment: { entity: { id: paymentId, order_id: orderId, status: 'captured', amount: amountPaise, currency: 'INR' } } }
+function capturedPayment(capturedPaymentId = paymentId) {
+  return { payment: { entity: { id: capturedPaymentId, order_id: orderId, status: 'captured', amount: amountPaise, currency: 'INR' } } }
 }
 
 test('accepts a valid HMAC over the exact raw request bytes', async () => {
@@ -110,6 +120,17 @@ test('processes payment.captured and order.paid idempotently', async () => {
   assert.equal(store.captureRpcCalls, 1)
 })
 
+test('routes captured amount and currency mismatches to server-side review instead of confirmation', async () => {
+  const store = new FakeStore()
+  const handle = createRazorpayWebhookHandler(secret, store)
+  const wrongAmount = { payment: { entity: { id: paymentId, order_id: orderId, status: 'captured', amount: amountPaise + 100, currency: 'INR' } } }
+  const wrongCurrency = { payment: { entity: { id: paymentId, order_id: orderId, status: 'captured', amount: amountPaise, currency: 'USD' } } }
+  assert.equal((await handle(signedRequest('payment.captured', 'evt-wrong-amount', wrongAmount))).status, 200)
+  assert.equal((await handle(signedRequest('payment.captured', 'evt-wrong-currency', wrongCurrency))).status, 200)
+  assert.equal(store.reviewOrders.has(orderId), true)
+  assert.equal(store.capturedOrders.has(orderId), false)
+})
+
 test('processes payment.failed without downgrading a captured payment', async () => {
   const store = new FakeStore()
   const handle = createRazorpayWebhookHandler(secret, store)
@@ -123,6 +144,28 @@ test('processes payment.failed without downgrading a captured payment', async ()
   await capturedHandle(signedRequest('payment.failed', 'evt-failure-late', failedPayload))
   assert.equal(capturedStore.failedPayments.has(paymentId), false)
   assert.equal(capturedStore.capturedOrders.has(orderId), true)
+})
+
+test('allows a delayed captured event to resolve an earlier failed notification', async () => {
+  const store = new FakeStore()
+  const handle = createRazorpayWebhookHandler(secret, store)
+  const failedPayload = { payment: { entity: { id: paymentId, order_id: orderId, status: 'failed' } } }
+  assert.equal((await handle(signedRequest('payment.failed', 'evt-failed-first', failedPayload))).status, 200)
+  assert.equal(store.failedPayments.has(paymentId), true)
+  assert.equal((await handle(signedRequest('payment.captured', 'evt-captured-late', capturedPayment()))).status, 200)
+  assert.equal(store.capturedOrders.has(orderId), true)
+  assert.equal(store.captureRpcCalls, 1)
+})
+
+test('allows a successful retry on the same Razorpay order after an earlier payment attempt failed', async () => {
+  const store = new FakeStore()
+  const handle = createRazorpayWebhookHandler(secret, store)
+  const failedPaymentId = 'pay_test_failed_123'
+  const successfulPaymentId = 'pay_test_success_123'
+  const failedPayload = { payment: { entity: { id: failedPaymentId, order_id: orderId, status: 'failed' } } }
+  assert.equal((await handle(signedRequest('payment.failed', 'evt-same-order-failed', failedPayload))).status, 200)
+  assert.equal((await handle(signedRequest('payment.captured', 'evt-same-order-captured', capturedPayment(successfulPaymentId)))).status, 200)
+  assert.equal(store.capturedOrders.get(orderId)?.paymentId, successfulPaymentId)
 })
 
 test('returns retryable errors after database failures and safely retries', async () => {
@@ -147,4 +190,27 @@ test('does not acknowledge an event already claimed by a concurrent delivery', a
   store.events.set(eventId, { id: 'evt-row-busy', state: 'processing' })
   const handle = createRazorpayWebhookHandler(secret, store)
   assert.equal((await handle(signedRequest('payment.captured', eventId, capturedPayment()))).status, 503)
+})
+
+test('a webhook worker that lost its claim cannot overwrite a newer claim', async () => {
+  const store = new FakeStore()
+  const first = await store.claimEvent({ eventId: 'evt-fence', eventType: 'payment.captured', orderId, paymentId, redactedPayload: { amount: amountPaise, currency: 'INR', order_id: orderId, payment_id: paymentId }, leaseToken: 'worker-a' })
+  assert.equal(first.state, 'claimed')
+  // Simulate the database lease expiry/reclaim by advancing ownership to B.
+  const row = store.events.get('evt-fence')!
+  row.state = 'error'
+  const second = await store.claimEvent({ eventId: 'evt-fence', eventType: 'payment.captured', orderId, paymentId, redactedPayload: { amount: amountPaise, currency: 'INR', order_id: orderId, payment_id: paymentId }, leaseToken: 'worker-b' })
+  assert.equal(second.state, 'claimed')
+  await assert.rejects(() => store.processEvent({ eventRowId: first.state === 'claimed' ? first.eventRowId : '', leaseToken: 'worker-a', action: 'captured', orderId, paymentId, amountPaise, currency: 'INR' }), /lease_lost/)
+  await store.processEvent({ eventRowId: second.state === 'claimed' ? second.eventRowId : '', leaseToken: 'worker-b', action: 'captured', orderId, paymentId, amountPaise, currency: 'INR' })
+  assert.equal(row.state, 'processed')
+  assert.equal(store.captureRpcCalls, 1)
+})
+
+test('rejects a captured event linked to a different provider order', async () => {
+  const store = new FakeStore()
+  const handle = createRazorpayWebhookHandler(secret, store)
+  const mismatched = { payment: { entity: { id: paymentId, order_id: 'order_test_other_123', status: 'captured', amount: amountPaise, currency: 'INR' } } }
+  assert.equal((await handle(signedRequest('payment.captured', 'evt-order-mismatch', mismatched))).status, 503)
+  assert.equal(store.capturedOrders.size, 0)
 })
