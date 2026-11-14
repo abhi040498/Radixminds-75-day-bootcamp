@@ -13,7 +13,7 @@ test('hero programme CTA opens the combined Programs route', async () => {
   assert.doesNotMatch(hero, /href="#programs"/)
 })
 
-test('programme listing cards expose separate board badges and two correct actions', async () => {
+test('dedicated Programs page renders both full-size programme cards with correct actions', async () => {
   const cards = await source('src/components/sections/ProgramSelection.tsx')
   const programsPage = await source('src/pages/PublicPages.tsx')
   assert.match(cards, /program-class-badge">\{grade\.toUpperCase\(\)\}/)
@@ -21,8 +21,13 @@ test('programme listing cards expose separate board badges and two correct actio
   assert.match(cards, /className="compact-card-top"[\s\S]*?<span>\{grade\.toUpperCase\(\)\}<\/span>[\s\S]*?<span className="board-options">CBSE · ICSE · STATE BOARD/)
   assert.match(cards, /className="program-enrol">Enroll/)
   assert.match(cards, /className="program-view">Explore/)
-  assert.match(cards, /program-listing-actions/)
-  assert.match(programsPage, /<ProgramSelection[^>]+compactListings \/>/)
+  assert.match(programsPage, /<ProgramSelection sectionId="program-listing"[^>]*intro="Compare subjects, learning modes and the current program fee—then explore the pathway that fits your class\." \/>/)
+  assert.doesNotMatch(programsPage.match(/export function ProgramsPage\(\) \{[\s\S]*?\n\}/)?.[0] ?? '', /compactListings/)
+  assert.match(cards, /: displayPrograms\.map\(\(\{ content, program, index \}\) => compactListings[\s\S]*?: <ProgramCard key=\{content\.code\} program=\{program!\}/)
+  const campaign = await source('src/data/campaign.ts')
+  assert.match(campaign, /code: 'class-10'[\s\S]*?code: 'class-12'/)
+  assert.match(cards, /const displayPrograms = campaign\.programs\.map\([\s\S]*?filter\(item => item\.program && \(!onlyProgram \|\| item\.content\.code === onlyProgram\)\)/)
+  assert.match(cards, /\{homepage\s*\? campaign\.programs\.map\([\s\S]*?<HomepageProgramCard key=\{content\.code\}/)
   assert.match(cards, /to=\{`\/enrol\?program=\$\{code\}`\}/)
   assert.match(cards, /to=\{index === 0 \? '\/programs\/class-10' : '\/programs\/class-12'\}/)
   assert.match(cards, /formatINR\(program\.payablePaise\)/)

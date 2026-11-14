@@ -92,7 +92,7 @@ export function AboutPage() {
 
 export function ProgramsPage() {
   return <InteriorPage title="Board Bootcamp Programs" description="Compare the Radix Minds 75-day Class 10 and Class 12 board bootcamp programs and explore each subject pathway." eyebrow="CLASS 10 & CLASS 12" headline="Choose your class. Start with a clear plan." lead="Two focused 75-day programs, designed around the subjects students need to prepare." crumb="Programs" cta={false}>
-    <ProgramSelection sectionId="program-listing" eyebrow="CLASS 10 & CLASS 12" title="Choose your board program." intro="Compare subjects and the current program fee—then enroll or explore the pathway that fits your class." compactListings />
+    <ProgramSelection sectionId="program-listing" eyebrow="CLASS 10 & CLASS 12" title="Choose your board program." intro="Compare subjects, learning modes and the current program fee—then explore the pathway that fits your class." />
     <FAQs variant="programs" />
     <ProgramNextStep />
   </InteriorPage>
