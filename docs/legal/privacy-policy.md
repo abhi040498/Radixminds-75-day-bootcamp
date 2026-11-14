@@ -1,5 +1,7 @@
 # Privacy Policy
 
+**Policy version: 2026-11-14**
+
 ## 1. Introduction
 
 Radix Minds respects the privacy of students, parents, guardians and visitors who use our website and educational services.
@@ -95,13 +97,15 @@ We aim to share only information necessary for the relevant purpose.
 
 We do not sell student personal information as a commercial product.
 
-## 6. Hosting and Database Services
+## 6. Website, Database and Payment Service Providers
 
-Radix Minds uses or may use third-party infrastructure providers to operate the website and maintain enrolment information.
+Radix Minds uses third-party service providers to operate the bootcamp website, application, enrolment records and online payments.
 
-Our current technical architecture includes Supabase for database services. Website hosting is intended through Hostinger.
+- **Netlify** hosts and deploys the Radix Minds 75-Day Board Bootcamp website and application, including its serverless application functions.
+- **Supabase** provides the application's database and authentication services used to manage enrolment and authorised administrative access.
+- **Razorpay** processes online payment transactions when checkout is enabled. Radix Minds receives the transaction references, payment status and related payment information needed to manage enrolments and refunds.
 
-The final production hosting and data-processing arrangements will be reflected in this policy if they materially differ.
+These providers may process information necessary to deliver, secure and maintain their respective services, subject to their applicable terms and privacy policies.
 
 ## 7. Payment Information
 
