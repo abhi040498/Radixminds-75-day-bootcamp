@@ -156,3 +156,12 @@
   .sunday-highlights{grid-template-columns:minmax(0,1fr)}
   .faq-item summary{grid-template-columns:26px minmax(0,1fr) 16px;gap:7px;padding:11px;font-size:12px}
 }
+
+/* Programme listing actions on the existing compact programme cards */
+.program-listing-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));flex:1;min-width:0;gap:7px}
+.program-listing-actions>a{display:flex;min-width:0;min-height:41px;align-items:center;justify-content:center;gap:6px;padding:7px 10px;border-radius:999px;font-size:11px;font-weight:850;text-align:center;text-decoration:none}
+.program-listing-actions .program-enrol{background:#ffd02e;color:#071f43;box-shadow:0 5px 13px rgba(233,162,59,.2)}
+.program-listing-actions .program-enrol:hover{background:#ffdf69}
+.program-listing-actions .program-view{border:1px solid rgba(7,31,67,.55);background:rgba(255,255,255,.3);color:#071f43}
+.program-listing-actions>a:focus-visible{outline:3px solid #142b49;outline-offset:3px}
+@media(max-width:560px){.program-listing-actions{gap:5px}.program-listing-actions>a{min-height:42px;padding:6px;font-size:10px}}

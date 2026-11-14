@@ -442,10 +442,9 @@ async function sendEnrolmentStatus(reference: string, token: string, res: expres
 
   const { data: finalEnrollment } = await db.from('enrolments').select('status').eq('id', enrollment.id).single()
   const { data: finalPayment } = await db.from('payments').select('provider_payment_id,amount_paise,currency,status,captured_at,order_creation_retryable').eq('enrolment_id', enrollment.id).order('attempt_number', { ascending: false }).limit(1).maybeSingle()
-  const { data: refundRequest } = await db.from('refund_requests').select('request_reference,status,requested_at,cutoff_at,decision,decided_at,approved_amount_paise,provider_status').eq('enrolment_id', enrollment.id).maybeSingle()
   const status = finalEnrollment?.status === 'confirmed' ? 'confirmed' : finalPayment?.status === 'failed' ? 'failed' : finalPayment?.status === 'needs_review' || finalEnrollment?.status === 'needs_review' ? 'needs_review' : 'pending'
   const checkoutReady = (status === 'pending' || status === 'failed') && enrollment.status === 'pending_payment' && checkoutBaseReady && validateRazorpayKeyMode()
-  return res.json({ status, checkoutReady, enrolmentReference: enrollment.public_reference, studentName: student?.full_name ?? '', program: enrollment.program_snapshot, subjects: enrollment.subjects_snapshot, price: enrollment.pricing_snapshot, payment: finalPayment ? { reference: finalPayment.provider_payment_id, amountPaise: finalPayment.amount_paise, currency: finalPayment.currency, status: finalPayment.status, capturedAt: finalPayment.captured_at, retryableOrderFailure: finalPayment.order_creation_retryable === true } : null, refundRequest: refundRequest ? { reference: refundRequest.request_reference, status: refundRequest.status, requestedAt: refundRequest.requested_at, cutoffAt: refundRequest.cutoff_at, decision: refundRequest.decision, decidedAt: refundRequest.decided_at, approvedAmountPaise: refundRequest.approved_amount_paise, providerStatus: refundRequest.provider_status } : null, support: { whatsappPhone: config.WHATSAPP_PHONE, telegramUrl: config.TELEGRAM_URL } })
+  return res.json({ status, checkoutReady, enrolmentReference: enrollment.public_reference, studentName: student?.full_name ?? '', program: enrollment.program_snapshot, subjects: enrollment.subjects_snapshot, price: enrollment.pricing_snapshot, payment: finalPayment ? { reference: finalPayment.provider_payment_id, amountPaise: finalPayment.amount_paise, currency: finalPayment.currency, status: finalPayment.status, capturedAt: finalPayment.captured_at, retryableOrderFailure: finalPayment.order_creation_retryable === true } : null, support: { whatsappPhone: config.WHATSAPP_PHONE, telegramUrl: config.TELEGRAM_URL } })
 }
 
 app.get('/api/v1/enrolments/recover', requireTrustedClientIp, publicLimiter, async (req, res) => {
@@ -460,30 +459,6 @@ app.get('/api/v1/enrolments/:reference/status', requireTrustedClientIp, publicLi
   if (!isSameOriginCookieRequest(req.get('origin'), req.get('sec-fetch-site'), isApprovedBrowserOrigin)) return fail(res, 403, 'ORIGIN_REJECTED', 'Request origin is not allowed.')
   const reference = String(req.params.reference ?? '')
   return sendEnrolmentStatus(reference, enrollmentTokenFromRequest(req, reference), res)
-})
-
-const refundRequestSchema = z.object({ reason: z.string().trim().min(4).max(2000) }).strict()
-app.post('/api/v1/enrolments/:reference/refunds', csrfOriginGuard, requireTrustedClientIp, publicLimiter, async (req, res) => {
-  if (!hasDatabase) return databaseUnavailable(res)
-  const parsed = refundRequestSchema.safeParse(req.body)
-  if (!parsed.success) return fail(res, 422, 'VALIDATION_ERROR', 'Enter a short reason for the refund request.')
-  const reference = String(req.params.reference ?? '')
-  const enrollment = await getEnrollmentByToken(reference, enrollmentTokenFromRequest(req, reference))
-  if (!enrollment) return fail(res, 404, 'ENROLMENT_NOT_FOUND', 'This confirmation link is invalid or expired.')
-  const key = req.get('idempotency-key')
-  if (!validIdempotencyKey(key)) return fail(res, 400, 'IDEMPOTENCY_KEY_REQUIRED', 'Refresh the page and try again.')
-  const { data, error } = await getDatabase().rpc('request_refund', { p_public_reference: reference, p_idempotency_key: key, p_reason: parsed.data.reason })
-  if (error) {
-    const message = String(error.message ?? '')
-    if (message.includes('REFUND_REQUEST_WINDOW_CLOSED')) return fail(res, 409, 'REFUND_WINDOW_CLOSED', 'The standard refund request window has closed. Contact Radix Minds if an applicable legal exception needs review.')
-    if (message.includes('REFUND_PAYMENT_NOT_CAPTURED')) return fail(res, 409, 'REFUND_PAYMENT_NOT_CAPTURED', 'A verified captured payment is required to request a refund.')
-    if (message.includes('REFUND_REQUEST_EXISTS')) return fail(res, 409, 'REFUND_REQUEST_EXISTS', 'A refund request already exists for this enrolment.')
-    if (message.includes('ENROLMENT_NOT_FOUND')) return fail(res, 404, 'ENROLMENT_NOT_FOUND', 'This enrolment could not be found.')
-    return fail(res, 503, 'REFUND_REQUEST_UNAVAILABLE', 'The refund request could not be saved. Please contact Radix Minds.')
-  }
-  const request = Array.isArray(data) ? data[0] : data
-  if (!request?.refund_request_id) return fail(res, 503, 'REFUND_REQUEST_UNAVAILABLE', 'The refund request could not be saved.')
-  return res.status(request.existing ? 200 : 201).json({ submitted: true, status: request.status, requestReference: request.request_reference, requestedAt: request.requested_at, cutoffAt: request.cutoff_at, message: 'Your request has been received for review. Submission does not guarantee approval.' })
 })
 
 const refundExceptionSchema=z.object({enrolmentReference:z.string().regex(/^RM-[A-F0-9]{20}$/),reason:z.string().trim().min(4).max(2000),exceptionNote:z.string().trim().min(4).max(2000)}).strict()

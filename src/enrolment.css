@@ -95,16 +95,7 @@
 .enrol-aside-fee>b{font-size:27px;line-height:1.15}
 .enrolment-aside>p{align-items:flex-start;overflow-wrap:anywhere;font-size:12px;line-height:1.6}
 .enrolment-aside>p svg{flex:none;margin-top:2px}
-.enrol-refund-policy,.student-refund-request{margin:15px 0;padding:14px 16px;border:1px solid #e7dfc9;border-radius:13px;background:#fcfaf3;color:#536269;font-size:11px;line-height:1.65}
-.enrol-refund-policy>strong,.student-refund-request>strong{display:block;color:#8d6323;font-size:9px;font-weight:900;letter-spacing:1px}
-.enrol-refund-policy p,.student-refund-request>p{margin:7px 0 0}
-.student-refund-request label{display:grid;gap:6px;margin-top:13px;color:#344b58;font-size:10px;font-weight:750}
-.student-refund-request textarea{width:100%;min-height:82px;padding:10px;border:1px solid #daddd7;border-radius:9px;background:white;color:#142b49;font:inherit;font-size:11px;resize:vertical}
-.student-refund-request button,.admin-refund-controls button,.admin-refund-process{min-height:38px;margin-top:10px;padding:0 14px;border:0;border-radius:9px;background:#142b49;color:white;font-size:10px;font-weight:800;cursor:pointer}
-.student-refund-request button:disabled,.admin-refund-controls button:disabled,.admin-refund-process:disabled{opacity:.55;cursor:not-allowed}
-.student-refund-request>p[role="status"]{padding:9px;border-radius:8px;background:#edf5f1;color:#245f54}
-.student-refund-status{display:grid;gap:6px;margin-top:12px;padding:12px;border:1px solid #dce6df;border-radius:10px;background:white;color:#40575e;font-size:11px}
-.student-refund-status small{color:#71807d;font-size:10px}
+.admin-refund-controls button,.admin-refund-process{min-height:38px;margin-top:10px;padding:0 14px;border:0;border-radius:9px;background:#142b49;color:white;font-size:10px;font-weight:800;cursor:pointer}
 .admin-refund-list{display:grid;gap:12px;margin-top:18px}
 .admin-refund-card{padding:17px;border:1px solid #e4e5df;border-radius:15px;background:#fff}
 .admin-refund-card>header{display:flex;justify-content:space-between;gap:15px;align-items:flex-start}
