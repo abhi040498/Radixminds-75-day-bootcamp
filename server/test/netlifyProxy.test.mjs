@@ -7,22 +7,25 @@ import { pathToFileURL } from 'node:url'
 function invokeNetlifyRequests(requests, extraEnv = {}) {
   const functionUrl = pathToFileURL(resolve('netlify/functions/api.ts')).href
   const source = `
-    const { handler } = await import(${JSON.stringify(functionUrl)});
+    const { default: handler } = await import(${JSON.stringify(functionUrl)});
     const responses = [];
     for (const request of ${JSON.stringify(requests)}) {
-      const response = await handler({
-      httpMethod: request.method || 'POST', path: request.path || '/api/v1/enrolments',
-        headers: {
-          origin: request.origin || 'https://example-test-project.netlify.app',
-          'sec-fetch-site': 'same-origin', 'content-type': 'application/json',
-          ...(request.requestMethod ? { 'access-control-request-method': request.requestMethod } : {}),
-          ...(request.requestHeaders ? { 'access-control-request-headers': request.requestHeaders } : {}),
-          'x-forwarded-for': request.forwardedFor
-        },
-        body: '{}', isBase64Encoded: false,
-        requestContext: { identity: request.eventIp ? { sourceIp: request.eventIp } : {} }
-      }, request.contextIp ? { ip: request.contextIp } : {});
-      responses.push(request.method === 'OPTIONS' ? { statusCode: response.statusCode, headers: response.headers } : response.statusCode);
+      const headers = new Headers({
+        origin: request.origin || process.env.APP_ORIGIN,
+        'sec-fetch-site': 'same-origin',
+        'x-forwarded-for': request.forwardedFor || '198.51.100.240',
+      });
+      if (request.requestMethod) headers.set('access-control-request-method', request.requestMethod);
+      if (request.requestHeaders) headers.set('access-control-request-headers', request.requestHeaders);
+      if ((request.method || 'POST') !== 'OPTIONS') headers.set('content-type', 'application/json');
+      const response = await handler(new Request('https://bootcamp.radixminds.in' + (request.path || '/api/v1/enrolments'), {
+        method: request.method || 'POST',
+        headers,
+        ...((request.method || 'POST') === 'OPTIONS' ? {} : { body: '{}' }),
+      }), request.contextIp ? { ip: request.contextIp } : {});
+      responses.push(request.method === 'OPTIONS'
+        ? { statusCode: response.status, headers: Object.fromEntries(response.headers.entries()) }
+        : response.status);
     }
     console.log(JSON.stringify(responses));
   `
@@ -36,10 +39,9 @@ function invokeNetlifyRequests(requests, extraEnv = {}) {
       TMP: process.env.TMP,
       DOTENV_CONFIG_PATH: 'nonexistent-test-env-file',
       NODE_ENV: 'test',
-      APP_ORIGIN: 'https://example-test-project.netlify.app',
+      APP_ORIGIN: 'https://bootcamp.radixminds.in',
       ...extraEnv,
       PAYMENT_ENABLED: 'false',
-      POLICIES_APPROVED: 'false',
       RAZORPAY_MODE: 'test',
     },
   })
@@ -47,7 +49,7 @@ function invokeNetlifyRequests(requests, extraEnv = {}) {
 
 test('Netlify function allows credentialed preflight from the validated unique preview origin', () => {
   const origin = 'https://6af4368b34953cd07626929a--radixminds75daysbootcamp.netlify.app'
-  const result = invokeNetlifyRequests([{ method: 'OPTIONS', path: '/api/v1/enrolments', origin, requestMethod: 'POST', requestHeaders: 'content-type,idempotency-key' }], {
+  const result = invokeNetlifyRequests([{ method: 'OPTIONS', path: '/api/v1/enrolments', origin, requestMethod: 'POST', requestHeaders: 'content-type,idempotency-key,x-enrolment-token' }], {
     APP_ORIGIN: 'https://deploy-preview-1--radixminds75daysbootcamp.netlify.app',
     APPROVED_NETLIFY_CONTEXT: 'deploy-preview',
     SITE_NAME: 'radixminds75daysbootcamp',
@@ -58,6 +60,7 @@ test('Netlify function allows credentialed preflight from the validated unique p
   assert.equal(response.headers['access-control-allow-origin'], origin)
   assert.equal(response.headers['access-control-allow-credentials'], 'true')
   assert.match(response.headers['access-control-allow-headers'], /content-type/i)
+  assert.match(response.headers['access-control-allow-headers'], /x-enrolment-token/i)
 })
 
 test('unapproved origin receives no credentialed CORS permission', () => {
@@ -78,7 +81,7 @@ test('Netlify rate limiting uses trusted client IP and ignores spoofed X-Forward
     forwardedFor: `203.0.113.${(index % 200) + 1}`,
   }))
   requests.push({ contextIp: '198.51.100.11', forwardedFor: '203.0.113.250' })
-  const result = invokeNetlifyRequests(requests)
+  const result = invokeNetlifyRequests(requests, { POLICIES_APPROVED: 'true' })
   assert.equal(result.status, 0, result.stderr)
   const statuses = JSON.parse(result.stdout.trim().split(/\r?\n/).at(-1))
   assert.deepEqual(statuses.slice(0, 30), Array(30).fill(503), 'valid client requests should pass through rate limiting to the closed policy gate')

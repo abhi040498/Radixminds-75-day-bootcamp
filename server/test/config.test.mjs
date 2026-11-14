@@ -101,7 +101,7 @@ test('invalid webhook configuration returns 503 before signature verification', 
   const directory = mkdtempSync(join(os.tmpdir(), 'radixminds-webhook-route-test-'))
   try {
     const functionUrl = pathToFileURL(resolve('netlify/functions/api.ts')).href
-    const source = `import { handler } from ${JSON.stringify(functionUrl)}; const response = await handler({ httpMethod: 'POST', path: '/api/v1/webhooks/razorpay', headers: { 'content-type': 'application/json', 'x-razorpay-signature': 'invalid' }, body: 'not-json', isBase64Encoded: false, requestContext: { identity: { sourceIp: '127.0.0.1' } } }, {}); console.log(JSON.stringify({ statusCode: response.statusCode, body: response.body }))`
+    const source = `import handler from ${JSON.stringify(functionUrl)}; const response = await handler(new Request('https://bootcamp.radixminds.in/api/v1/webhooks/razorpay', { method: 'POST', headers: { 'content-type': 'application/json', 'x-razorpay-signature': 'invalid' }, body: 'not-json' }), { ip: '127.0.0.1' }); console.log(JSON.stringify({ statusCode: response.status, body: await response.text() }))`
     const result = spawnSync(process.execPath, ['--import', 'tsx', '--input-type=module', '-e', source], {
       cwd: process.cwd(),
       encoding: 'utf8',
@@ -112,7 +112,7 @@ test('invalid webhook configuration returns 503 before signature verification', 
         TMP: process.env.TMP,
         DOTENV_CONFIG_PATH: join(directory, 'does-not-exist'),
         NODE_ENV: 'test',
-        APP_ORIGIN: 'https://example-test-project.netlify.app',
+        APP_ORIGIN: 'https://bootcamp.radixminds.in',
         SUPABASE_URL: 'https://example-test-project.supabase.co',
         SUPABASE_SECRET_KEY: 'synthetic-database-secret-fixture',
         RAZORPAY_KEY_ID: 'rzp_test_syntheticfixture',
@@ -150,11 +150,11 @@ test('enrolment submission fails closed before database access when the status-t
           program_learning_modes: [{ mode: 'online', label: 'Online', is_available: true, batch_label: null }]
         }]);
       };
-      const { handler } = await import(${JSON.stringify(functionUrl)});
-      const response = await handler({
-        httpMethod: 'POST', path: '/api/v1/enrolments',
+      const handlerModule = await import(${JSON.stringify(functionUrl)});
+      const response = await handlerModule.default(new Request('https://bootcamp.radixminds.in/api/v1/enrolments', {
+        method: 'POST',
         headers: {
-          origin: 'https://example-test-project.netlify.app',
+          origin: 'https://bootcamp.radixminds.in',
           'sec-fetch-site': 'same-origin', 'content-type': 'application/json',
           'idempotency-key': '00000000-0000-4000-8000-000000000099'
         },
@@ -165,9 +165,8 @@ test('enrolment submission fails closed before database access when the status-t
           whatsappUpdatesConsent: false, whatsappMobile: '', policyAcknowledged: true,
           policyVersions: { terms: '2026-11-10', privacy: '2026-11-10', refund: '2026-11-10' }
         }),
-        isBase64Encoded: false, requestContext: { identity: { sourceIp: '127.0.0.1' } }
-      }, {});
-      console.log(JSON.stringify({ statusCode: response.statusCode, body: response.body, fetchCalls }));
+      }), { ip: '127.0.0.1' });
+      console.log(JSON.stringify({ statusCode: response.status, body: await response.text(), fetchCalls }));
     `
     const result = spawnSync(process.execPath, ['--import', 'tsx', '--input-type=module', '-e', source], {
       cwd: process.cwd(),
@@ -179,7 +178,7 @@ test('enrolment submission fails closed before database access when the status-t
         TMP: process.env.TMP,
         DOTENV_CONFIG_PATH: join(directory, 'does-not-exist'),
         NODE_ENV: 'test',
-        APP_ORIGIN: 'https://example-test-project.netlify.app',
+        APP_ORIGIN: 'https://bootcamp.radixminds.in',
         SUPABASE_URL: 'http://127.0.0.1:54321',
         SUPABASE_SECRET_KEY: 'synthetic-database-secret-fixture',
         RAZORPAY_KEY_ID: 'rzp_test_syntheticfixture',
@@ -227,11 +226,10 @@ test('enrolment RPC errors log only sanitized diagnostics and preserve the safe 
         }, { status: 400 });
         throw new Error('Unexpected synthetic fetch path');
       };
-      const { handler } = await import(${JSON.stringify(functionUrl)});
-      const response = await handler({
-        httpMethod: 'POST', path: '/api/v1/enrolments',
-        headers: {
-          origin: 'https://example-test-project.netlify.app',
+      const handlerModule = await import(${JSON.stringify(functionUrl)});
+      const response = await handlerModule.default(new Request('https://bootcamp.radixminds.in/api/v1/enrolments', {
+        method: 'POST', headers: {
+          origin: 'https://bootcamp.radixminds.in',
           'sec-fetch-site': 'same-origin', 'content-type': 'application/json',
           'idempotency-key': '00000000-0000-4000-8000-000000000099'
         },
@@ -242,9 +240,8 @@ test('enrolment RPC errors log only sanitized diagnostics and preserve the safe 
           whatsappUpdatesConsent: false, whatsappMobile: '', policyAcknowledged: true,
           policyVersions: { terms: '2026-11-10', privacy: '2026-11-10', refund: '2026-11-10' }
         }),
-        isBase64Encoded: false, requestContext: { identity: { sourceIp: '127.0.0.1' } }
-      }, {});
-      console.log(JSON.stringify({ statusCode: response.statusCode, body: response.body, diagnostic, fetchCalls }));
+      }), { ip: '127.0.0.1' });
+      console.log(JSON.stringify({ statusCode: response.status, body: await response.text(), diagnostic, fetchCalls }));
     `
     const result = spawnSync(process.execPath, ['--import', 'tsx', '--input-type=module', '-e', source], {
       cwd: process.cwd(),
@@ -256,7 +253,7 @@ test('enrolment RPC errors log only sanitized diagnostics and preserve the safe 
         TMP: process.env.TMP,
         DOTENV_CONFIG_PATH: join(directory, 'does-not-exist'),
         NODE_ENV: 'test',
-        APP_ORIGIN: 'https://example-test-project.netlify.app',
+        APP_ORIGIN: 'https://bootcamp.radixminds.in',
         SUPABASE_URL: 'http://127.0.0.1:54321',
         SUPABASE_SECRET_KEY: 'synthetic-database-secret-fixture',
         RAZORPAY_KEY_ID: 'rzp_test_syntheticfixture',

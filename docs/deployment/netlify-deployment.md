@@ -7,7 +7,7 @@ This guide prepares the existing Radix Minds Vite + Express application for Netl
 - Vite builds the public React site to `dist/`.
 - Netlify publishes `dist/` as static assets.
 - The existing Express application is exported from `server/src/index.ts` without opening a listener.
-- `netlify/functions/api.ts` wraps that same Express app with `serverless-http`.
+- `netlify/functions/api.ts` adapts Netlify's typed Fetch `Request`/`Context` invocation to the Express app. It passes only validated `Context.ip` into the API Gateway event used by `serverless-http`; it never trusts forwarded host or client-IP headers.
 - The `/api/*` rewrite invokes the function, preserving the existing frontend `/api/v1/...` requests and backend routes.
 - The `/*` rewrite serves `index.html` for React Router paths and refreshes. The API rewrite is intentionally listed first.
 - Local and Hostinger Node startup remain available through `server/src/start.ts` and `npm start`.
@@ -35,6 +35,7 @@ Configure runtime variables in Netlify's protected environment settings, never i
 |---|---|---|---|
 | `NODE_ENV` | Runtime mode | Deploy Preview, Production | Non-secret |
 | `APP_ORIGIN` | Exact allowed browser origin | Each context, matching that site URL | Non-secret |
+| `APPROVED_NETLIFY_CONTEXT` | Enables tightly scoped Deploy Preview origin matching | Deploy Previews only; set exactly to `deploy-preview`; leave unset in Production | Non-secret |
 | `SUPABASE_URL` | Supabase API endpoint | Each context | Public endpoint |
 | `SUPABASE_PUBLIC_KEY` | Supabase Auth public/anon key | Each context | Public key, restricted by RLS |
 | `SUPABASE_SECRET_KEY` or `SUPABASE_SERVICE_ROLE_KEY` | Privileged server-side database access (configure only one alias) | Each context | Secret; server only |
@@ -50,6 +51,12 @@ Configure runtime variables in Netlify's protected environment settings, never i
 | `WHATSAPP_PHONE` | Support number in message drafts | Each context, optional | Public contact detail |
 | `TELEGRAM_URL` | Support link | Each context, optional | Public URL |
 | `PORT` | Persistent Node listener port | Local only; not used by Netlify Functions | Non-secret |
+
+### Origin variables by Netlify context
+
+- **Production:** set `APP_ORIGIN=https://bootcamp.radixminds.in`. Leave `APPROVED_NETLIFY_CONTEXT` unset. The API accepts the production custom domain only as this exact configured origin. A Netlify production hostname is accepted only when it is the exact configured production origin and its `SITE_NAME` matches the corresponding approved site.
+- **Deploy Preview:** set `APPROVED_NETLIFY_CONTEXT=deploy-preview` and set `APP_ORIGIN` to the stable alias belonging to the same Netlify site: `https://deploy-preview-1--radixminds75daysbootcamp.netlify.app` when `SITE_NAME=radixminds75daysbootcamp`, or `https://deploy-preview-1--rm75daysbootcamp.netlify.app` when `SITE_NAME=rm75daysbootcamp`. The function also checks Netlify's runtime `SITE_NAME` before allowing that site's valid immutable deployment URLs.
+- Netlify supplies `SITE_NAME` at runtime. Do not hardcode it in source, store it as a secret, or manually set it to make an origin pass. A site-name/origin mismatch fails closed. Never use wildcard origins.
 
 The Netlify function smoke test now blanks Supabase, Razorpay, and status-token variables before importing the function bundle; it runs offline. Do not use real credentials for that test.
 

@@ -56,7 +56,7 @@ app.use(cors({
   origin: (origin, callback) => callback(null, origin && isApprovedBrowserOrigin(origin) ? origin : false),
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Idempotency-Key'],
+  allowedHeaders: ['Content-Type', 'Idempotency-Key', 'X-Enrolment-Token'],
 }))
 
 function rateLimitClientKey(req: express.Request) {
@@ -70,6 +70,21 @@ const limiterOptions = { windowMs: 15 * 60 * 1000, standardHeaders: 'draft-8' as
 const publicLimiter = rateLimit({ ...limiterOptions, limit: 30 })
 const checkoutLimiter = rateLimit({ ...limiterOptions, limit: 8 })
 const adminLoginLimiter = rateLimit({ ...limiterOptions, limit: 8 })
+
+const requireTrustedClientIp: express.RequestHandler = (req, res, next) => {
+  const clientIp = req.socket.remoteAddress
+  if (typeof clientIp !== 'string' || isIP(clientIp) === 0) {
+    return fail(res, 503, 'CLIENT_IP_UNAVAILABLE', 'This request cannot be processed right now. Please try again later.')
+  }
+  return next()
+}
+
+const requireEnrollmentPolicy: express.RequestHandler = (_req, res, next) => {
+  if (config.POLICIES_APPROVED !== 'true') {
+    return fail(res, 503, 'POLICIES_NOT_APPROVED', 'Enrolment submissions are temporarily unavailable while the approved policies and consent workflow are being prepared. Please contact Radix Minds.')
+  }
+  return next()
+}
 type ApiErrorCode = 'CONFIGURATION_REQUIRED' | 'VALIDATION_ERROR' | 'NOT_FOUND' | 'PAYMENT_PENDING' | 'PAYMENT_FAILED' | 'PAYMENT_MISMATCH' | 'ALREADY_CONFIRMED'
 function fail(res: express.Response, status: number, code: ApiErrorCode | string, message: string, fields?: Record<string, string>) {
   return res.status(status).json({ error: { code, message, requestId: res.locals.requestId, ...(fields ? { fields } : {}) } })
@@ -195,9 +210,8 @@ app.get('/api/v1/programs', async (_req, res) => {
   return res.json({ programs })
 })
 
-app.post('/api/v1/enrolments', publicLimiter, csrfOriginGuard, async (req, res) => {
+app.post('/api/v1/enrolments', csrfOriginGuard, requireEnrollmentPolicy, requireTrustedClientIp, publicLimiter, async (req, res) => {
   if (!hasDatabase) return databaseUnavailable(res)
-  if (config.POLICIES_APPROVED !== 'true') return fail(res, 503, 'POLICIES_NOT_APPROVED', 'Enrolment submissions are temporarily unavailable while the approved policies and consent workflow are being prepared. Please contact Radix Minds.')
   // The status token is persisted as a hash and is required to authorize later
   // status/payment requests. Fail before any database reads or writes instead
   // of allowing createStatusToken() to throw an opaque 500 below.
@@ -317,7 +331,7 @@ function withCheckoutOrder(payment: { id: string; status: string; provider_order
   return { paymentAttemptId: payment.id, enrolmentReference: reference, orderId: payment.provider_order_id, keyId: checkoutKeyId, amount: payment.amount_paise, currency: payment.currency, name: 'Radix Minds', description: '75-Day Board Bootcamp', status: payment.status }
 }
 
-app.post('/api/v1/enrolments/:reference/payment-orders', checkoutLimiter, csrfOriginGuard, async (req, res) => {
+app.post('/api/v1/enrolments/:reference/payment-orders', csrfOriginGuard, requireTrustedClientIp, checkoutLimiter, async (req, res) => {
   if (!hasDatabase) return databaseUnavailable(res)
   if (!checkoutBaseReady || !validateRazorpayKeyMode()) return fail(res, 503, 'PAYMENT_NOT_CONFIGURED', 'Secure online payment is not configured yet. Please contact Radix Minds.')
   const token = enrollmentTokenFromRequest(req, String(req.params.reference ?? ''))
@@ -353,7 +367,7 @@ app.post('/api/v1/enrolments/:reference/payment-orders', checkoutLimiter, csrfOr
 })
 
 const verifySchema = z.object({ enrolmentReference: z.string().regex(/^RM-[A-F0-9]{20}$/), razorpayOrderId: z.string().min(8).max(64), razorpayPaymentId: z.string().min(8).max(64), razorpaySignature: z.string().regex(/^[0-9a-f]{64}$/i) })
-app.post('/api/v1/payments/verify', checkoutLimiter, csrfOriginGuard, async (req, res) => {
+app.post('/api/v1/payments/verify', csrfOriginGuard, requireTrustedClientIp, checkoutLimiter, async (req, res) => {
   if (!hasDatabase || !checkoutBaseReady) return fail(res, 503, 'PAYMENT_NOT_CONFIGURED', 'Payment verification is not available yet. Please contact the team.')
   const parsed = verifySchema.safeParse(req.body)
   if (!parsed.success) return fail(res, 422, 'VALIDATION_ERROR', 'Payment details could not be verified.')
@@ -434,7 +448,7 @@ async function sendEnrolmentStatus(reference: string, token: string, res: expres
   return res.json({ status, checkoutReady, enrolmentReference: enrollment.public_reference, studentName: student?.full_name ?? '', program: enrollment.program_snapshot, subjects: enrollment.subjects_snapshot, price: enrollment.pricing_snapshot, payment: finalPayment ? { reference: finalPayment.provider_payment_id, amountPaise: finalPayment.amount_paise, currency: finalPayment.currency, status: finalPayment.status, capturedAt: finalPayment.captured_at, retryableOrderFailure: finalPayment.order_creation_retryable === true } : null, refundRequest: refundRequest ? { reference: refundRequest.request_reference, status: refundRequest.status, requestedAt: refundRequest.requested_at, cutoffAt: refundRequest.cutoff_at, decision: refundRequest.decision, decidedAt: refundRequest.decided_at, approvedAmountPaise: refundRequest.approved_amount_paise, providerStatus: refundRequest.provider_status } : null, support: { whatsappPhone: config.WHATSAPP_PHONE, telegramUrl: config.TELEGRAM_URL } })
 }
 
-app.get('/api/v1/enrolments/recover', publicLimiter, async (req, res) => {
+app.get('/api/v1/enrolments/recover', requireTrustedClientIp, publicLimiter, async (req, res) => {
   if (!isSameOriginCookieRequest(req.get('origin'), req.get('sec-fetch-site'), isApprovedBrowserOrigin)) return fail(res, 403, 'ORIGIN_REJECTED', 'Request origin is not allowed.')
   if (!hasDatabase) return databaseUnavailable(res)
   const reference = readCookie(req, 'rm_last_enrolment')
@@ -442,14 +456,14 @@ app.get('/api/v1/enrolments/recover', publicLimiter, async (req, res) => {
   return sendEnrolmentStatus(reference, token, res)
 })
 
-app.get('/api/v1/enrolments/:reference/status', publicLimiter, async (req, res) => {
+app.get('/api/v1/enrolments/:reference/status', requireTrustedClientIp, publicLimiter, async (req, res) => {
   if (!isSameOriginCookieRequest(req.get('origin'), req.get('sec-fetch-site'), isApprovedBrowserOrigin)) return fail(res, 403, 'ORIGIN_REJECTED', 'Request origin is not allowed.')
   const reference = String(req.params.reference ?? '')
   return sendEnrolmentStatus(reference, enrollmentTokenFromRequest(req, reference), res)
 })
 
 const refundRequestSchema = z.object({ reason: z.string().trim().min(4).max(2000) }).strict()
-app.post('/api/v1/enrolments/:reference/refunds', publicLimiter, csrfOriginGuard, async (req, res) => {
+app.post('/api/v1/enrolments/:reference/refunds', csrfOriginGuard, requireTrustedClientIp, publicLimiter, async (req, res) => {
   if (!hasDatabase) return databaseUnavailable(res)
   const parsed = refundRequestSchema.safeParse(req.body)
   if (!parsed.success) return fail(res, 422, 'VALIDATION_ERROR', 'Enter a short reason for the refund request.')
@@ -474,7 +488,7 @@ app.post('/api/v1/enrolments/:reference/refunds', publicLimiter, csrfOriginGuard
 
 const refundExceptionSchema=z.object({enrolmentReference:z.string().regex(/^RM-[A-F0-9]{20}$/),reason:z.string().trim().min(4).max(2000),exceptionNote:z.string().trim().min(4).max(2000)}).strict()
 
-app.post('/api/v1/enquiries', publicLimiter, csrfOriginGuard, async (req, res) => {
+app.post('/api/v1/enquiries', csrfOriginGuard, requireTrustedClientIp, publicLimiter, async (req, res) => {
   if (!hasDatabase) return databaseUnavailable(res)
   const parsed = enquirySchema.safeParse(req.body)
   if (!parsed.success) return fail(res, 422, 'VALIDATION_ERROR', 'Please check the enquiry form and try again.', Object.fromEntries(parsed.error.issues.map(issue => [String(issue.path[0] ?? 'form'), issue.message])))
@@ -585,7 +599,7 @@ app.post('/api/v1/admin/refunds/:id/process',requireAdmin,csrfOriginGuard,async(
   }finally{clearTimeout(timer)}
 })
 
-app.post('/api/v1/admin/session', adminLoginLimiter, csrfOriginGuard, async (req, res) => {
+app.post('/api/v1/admin/session', csrfOriginGuard, requireTrustedClientIp, adminLoginLimiter, async (req, res) => {
   if (!hasAdminAuth) return fail(res, 503, 'ADMIN_NOT_CONFIGURED', 'Supabase admin sign-in is not configured.')
   const parsed = z.object({ email: z.email().max(180), password: z.string().min(8).max(256) }).safeParse(req.body)
   if (!parsed.success) return fail(res, 422, 'VALIDATION_ERROR', 'Enter a valid admin email and password.')
@@ -821,10 +835,14 @@ app.patch('/api/v1/admin/enquiries/:id', requireAdmin, csrfOriginGuard, async (r
 })
 
 const errorHandler: ErrorRequestHandler = (error, req, res, _next) => {
-  const safeError = error && typeof error === 'object' ? error as { name?: unknown; code?: unknown; status?: unknown } : {}
-  const rawCode = safeError.code === 'entity.too.large' || safeError.code === 'entity.parse.failed'
+  const safeError = error && typeof error === 'object' ? error as { name?: unknown; code?: unknown; type?: unknown; status?: unknown } : {}
+  const stackFrames = error instanceof Error && error.stack
+    ? error.stack.split('\n').slice(1, 9).map(frame => frame.trim().slice(0, 300))
+    : []
+  const parserCode = safeError.type === 'entity.too.large' || safeError.type === 'entity.parse.failed' ? safeError.type : undefined
+  const rawCode = parserCode ?? (safeError.code === 'entity.too.large' || safeError.code === 'entity.parse.failed'
     ? safeError.code
-    : typeof safeError.code === 'string' && /^[A-Za-z0-9_-]{1,40}$/.test(safeError.code) ? safeError.code : undefined
+    : typeof safeError.code === 'string' && /^[A-Za-z0-9_-]{1,40}$/.test(safeError.code) ? safeError.code : undefined)
   const rawStatus = typeof safeError.status === 'number' && Number.isInteger(safeError.status) && safeError.status >= 400 && safeError.status <= 599 ? safeError.status : undefined
   console.error('api_error', {
     requestId: res.locals.requestId,
@@ -833,6 +851,7 @@ const errorHandler: ErrorRequestHandler = (error, req, res, _next) => {
     name: typeof safeError.name === 'string' && /^[A-Za-z][A-Za-z0-9]*Error$/.test(safeError.name) ? safeError.name : 'unknown',
     errorCode: rawCode,
     httpStatus: rawStatus ?? 500,
+    stackFrames,
   })
   if (rawCode === 'entity.too.large') return fail(res, 413, 'REQUEST_TOO_LARGE', 'The request is too large. Please shorten the saved details and retry.')
   if (rawCode === 'entity.parse.failed') return fail(res, 400, 'INVALID_JSON', 'The request could not be read. Please retry.')
