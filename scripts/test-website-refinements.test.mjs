@@ -101,3 +101,12 @@ test('homepage programme cards reserve separate layout rows for copy and the CTA
   assert.match(pricingStyles, /replica-program-copy>p\{[\s\S]*?-webkit-line-clamp:2/)
   assert.match(pricingStyles, /@media\(max-width:640px\)/)
 })
+
+test('homepage program cards put Enroll and Explore side by side without overflowing the section', async () => {
+  const cards = await source('src/components/sections/ProgramSelection.tsx')
+  const pricingStyles = await source('src/pricing.css')
+  assert.match(cards, /className="program-enrol">Enroll </)
+  assert.match(cards, /className="program-view">Explore </)
+  assert.match(pricingStyles, /replica-program-actions\{[\s\S]*?grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/)
+  assert.match(pricingStyles, /homepage-programs-section\{[\s\S]*?height:auto!important/)
+})
