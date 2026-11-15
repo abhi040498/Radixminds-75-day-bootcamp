@@ -52,8 +52,8 @@ function HomepageProgramCard({ program, index, tone, fallbackFeePaise, fallbackS
       <div className="replica-fee-box">
         <ProgramPriceBreakdown
           variant="replica"
-          originalPaise={program?.standardPaise ?? fallbackStandardFeePaise ?? null}
-          discountPercent={program?.discountPercent ?? fallbackDiscountPercent ?? null}
+          originalPaise={program ? program.standardPaise : fallbackStandardFeePaise ?? null}
+          discountPercent={program ? program.discountPercent : fallbackDiscountPercent ?? null}
           finalPaise={program?.payablePaise ?? fallbackFeePaise ?? 0}
         />
         <span>{(program?.durationDays ?? durationDays ?? 75)}-Day Programme</span>
@@ -109,7 +109,7 @@ function ProgramCard({ program, index, subjects, tone, homepage, fallbackStandar
       <div className="home-sunday-strip"><CalendarCheck size={22} /><div><strong>Every Sunday — Practice, Revision &amp; Doubt Clearing</strong><small>{homepage ? 'Weekly question practice and revision support.' : index === 0 ? 'Structured topic-wise preparation, guided practice and revision.' : 'Guided practice, revision and focused question-solving.'}</small></div></div>
       <div className="home-program-strengths">{strengths.map(({ Icon, label }) => <div key={label}><Icon size={19} /><strong>{label}</strong></div>)}</div>
       <div className="home-program-modes"><span><Laptop2 size={17} />Choose your learning mode</span>{(['online','hybrid','offline'] as const).map(mode => <span className={`home-mode-pill${modes.has(mode) ? ' is-available' : ' is-closed'}`} aria-label={`${mode[0].toUpperCase() + mode.slice(1)}: ${modes.has(mode) ? 'available' : 'not currently open'}`} key={mode}>{mode === 'online' ? <MonitorPlay size={14} /> : mode === 'hybrid' ? <Blend size={14} /> : <School size={14} />}{mode[0].toUpperCase() + mode.slice(1)}{!modes.has(mode) && ' · closed'}</span>)}</div>
-      <div className={`home-program-footer program-listing-footer${program.discountPercent !== null ? ' has-offer' : ''}`}><div className="home-program-ctas"><Link to={`/enrol?program=${code}`} className="program-enrol">Enroll Now <ArrowUpRight size={17} /></Link><Link to={index === 0 ? '/programs/class-10' : '/programs/class-12'} className="program-view">Explore <ArrowRight size={16} /></Link></div><div className="home-program-price"><span>{program.durationDays}-Day Programme</span><ProgramPriceBreakdown variant="home-card" originalPaise={program.standardPaise ?? fallbackStandardFeePaise ?? null} discountPercent={program.discountPercent ?? fallbackDiscountPercent ?? null} finalPaise={program.payablePaise} /></div></div>
+      <div className={`home-program-footer program-listing-footer${program.discountPercent !== null ? ' has-offer' : ''}`}><div className="home-program-ctas"><Link to={`/enrol?program=${code}`} className="program-enrol">Enroll Now <ArrowUpRight size={17} /></Link><Link to={index === 0 ? '/programs/class-10' : '/programs/class-12'} className="program-view">Explore <ArrowRight size={16} /></Link></div><div className="home-program-price"><span>{program.durationDays}-Day Programme</span><ProgramPriceBreakdown variant="home-card" originalPaise={program.standardPaise} discountPercent={program.discountPercent} finalPaise={program.payablePaise} /></div></div>
     </div>
   </article>
 }
