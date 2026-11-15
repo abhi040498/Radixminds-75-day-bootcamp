@@ -30,7 +30,7 @@ test('dedicated Programs page renders both full-size programme cards with correc
   assert.match(cards, /\{homepage\s*\? campaign\.programs\.map\([\s\S]*?<HomepageProgramCard key=\{content\.code\}/)
   assert.match(cards, /to=\{`\/enrol\?program=\$\{code\}`\}/)
   assert.match(cards, /to=\{index === 0 \? '\/programs\/class-10' : '\/programs\/class-12'\}/)
-  assert.match(cards, /formatINR\(program\.payablePaise\)/)
+  assert.match(cards, /ProgramPriceBreakdown variant="home-card"[\s\S]*?finalPaise=\{program\.payablePaise\}/)
   assert.match(cards, /\{program\.durationDays\}-Day Programme/)
 })
 
@@ -65,4 +65,31 @@ test('general and course FAQs no longer publish refund policy copy', async () =>
   const coursePages = await source('src/pages/PublicPages.tsx')
   assert.doesNotMatch(homeFaqs, /refund requests within 7 calendar days/i)
   assert.doesNotMatch(coursePages, /refund requests within 7 calendar days/i)
+})
+
+
+test('all public program price displays include original fee, discount and final amount', async () => {
+  const cards = await source('src/components/sections/ProgramSelection.tsx')
+  const breakdown = await source('src/components/ProgramPriceBreakdown.tsx')
+  const detailPages = await source('src/pages/PublicPages.tsx')
+  const enrolment = await source('src/pages/Enrolment.tsx')
+  assert.match(breakdown, /Original price/)
+  assert.match(breakdown, /% OFF/)
+  assert.match(breakdown, /Final price/)
+  assert.match(cards, /ProgramPriceBreakdown variant="replica"/)
+  assert.match(cards, /fallbackStandardFeePaise/)
+  assert.match(detailPages, /ProgramPriceBreakdown variant="course"/)
+  assert.match(enrolment, /ProgramPriceBreakdown variant="enrol-option"/)
+  assert.match(enrolment, /ProgramPriceBreakdown variant="enrol-aside"/)
+  assert.match(enrolment, /ProgramPriceBreakdown variant="receipt"/)
+})
+
+test('secondary number is displayed while primary WhatsApp number stays unchanged', async () => {
+  const campaign = await source('src/data/campaign.ts')
+  const footer = await source('src/components/sections/ContactCTA.tsx')
+  const contactPage = await source('src/pages/PublicPages.tsx')
+  assert.match(campaign, /phones: \['9304829718', '9709197646'\]/)
+  assert.match(campaign, /whatsappPhone: '9304829718'/)
+  assert.match(footer, /campaign\.contact\.phones\.map/)
+  assert.match(contactPage, /campaign\.contact\.phones\.map/)
 })
