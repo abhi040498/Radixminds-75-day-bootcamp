@@ -25,7 +25,7 @@ const legacyGradeTwelveStrengths = [
   { Icon: ClipboardCheck, label: 'Topic-wise tests' }, { Icon: ChartNoAxesColumnIncreasing, label: 'Performance review' },
 ]
 
-function HomepageProgramCard({ program, index, tone, fallbackFeePaise, fallbackStandardFeePaise, fallbackDiscountPercent, durationDays }: { program?: PublicProgram; index: number; tone: string; fallbackFeePaise?: number; fallbackStandardFeePaise?: number; fallbackDiscountPercent?: number; durationDays?: number }) {
+function HomepageProgramCard({ program, index, tone, fallbackFeePaise, fallbackStandardFeePaise, fallbackDiscountPercent }: { program?: PublicProgram; index: number; tone: string; fallbackFeePaise?: number; fallbackStandardFeePaise?: number; fallbackDiscountPercent?: number }) {
   const grade = index === 0 ? 'Class 10' : 'Class 12'
   const code = index === 0 ? 'class-10' : 'class-12'
   const title = index === 0 ? 'Build Your Strongest Foundation.' : 'Prepare for the Next Big Step.'
@@ -137,9 +137,9 @@ export function ProgramSelection({
         </div>}
         {!loading && !homepage && programs.length > 0 && displayPrograms.length < expectedProgramCount && <div className="program-catalog-status" role="status"><span>Program details could not be loaded. Contact Radix Minds to confirm current details.</span><button type="button" onClick={retry}>Try again</button></div>}
         {homepage
-        ? campaign.programs.map((content, index) => <HomepageProgramCard key={content.code} program={programs.find(item => item.code === content.code)} index={index} tone={index === 0 ? 'program-navy' : 'program-teal'} fallbackFeePaise={content.fallbackFeePaise} fallbackStandardFeePaise={content.fallbackStandardFeePaise} fallbackDiscountPercent={content.fallbackDiscountPercent} durationDays={content.durationDays} />)
+        ? campaign.programs.map((content, index) => <HomepageProgramCard key={content.code} program={programs.find(item => item.code === content.code)} index={index} tone={index === 0 ? 'program-navy' : 'program-teal'} fallbackFeePaise={content.fallbackFeePaise} fallbackStandardFeePaise={content.fallbackStandardFeePaise} fallbackDiscountPercent={content.fallbackDiscountPercent} />)
           : displayPrograms.map(({ content, program, index }) => compactListings
-            ? <HomepageProgramCard key={content.code} program={program} index={index} tone={index === 0 ? 'program-navy' : 'program-teal'} fallbackFeePaise={content.fallbackFeePaise} fallbackStandardFeePaise={content.fallbackStandardFeePaise} fallbackDiscountPercent={content.fallbackDiscountPercent} durationDays={content.durationDays} />
+            ? <HomepageProgramCard key={content.code} program={program} index={index} tone={index === 0 ? 'program-navy' : 'program-teal'} fallbackFeePaise={content.fallbackFeePaise} fallbackStandardFeePaise={content.fallbackStandardFeePaise} fallbackDiscountPercent={content.fallbackDiscountPercent} />
             : <ProgramCard key={content.code} program={program!} index={index} subjects={content.subjects} tone={index === 0 ? 'program-navy' : 'program-teal'} homepage={homepage} fallbackStandardFeePaise={content.fallbackStandardFeePaise} fallbackDiscountPercent={content.fallbackDiscountPercent} />)}</div>
     </div>
   </section>
