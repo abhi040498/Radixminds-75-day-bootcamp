@@ -91,7 +91,7 @@ function ScienceBooksArtwork() {
 }
 
 function ProgramCard({ program, index, subjects, tone, homepage, fallbackStandardFeePaise, fallbackDiscountPercent }: { program: PublicProgram; index: number; subjects: readonly string[]; tone: string; homepage: boolean; fallbackStandardFeePaise?: number; fallbackDiscountPercent?: number }) {
-  if (homepage) return <HomepageProgramCard program={program} index={index} subjects={subjects} tone={tone} />
+  if (homepage) return <HomepageProgramCard program={program} index={index} tone={tone} fallbackStandardFeePaise={fallbackStandardFeePaise} fallbackDiscountPercent={fallbackDiscountPercent} />
   const grade = index === 0 ? 'Class 10' : 'Class 12'
   const modes = new Set(program.modes.map(item => item.mode))
   const code = index === 0 ? 'class-10' : 'class-12'
