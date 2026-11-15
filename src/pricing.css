@@ -1,0 +1,68 @@
+.program-price-breakdown{display:grid;width:100%;min-width:0;gap:5px;color:#142b49;text-align:left}
+.program-price-original,.program-price-discount{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0}
+.program-price-original span{color:#71808a;font-size:9px;font-weight:650;line-height:1.3}
+.program-price-original del{color:#7b858b;font-size:11px;font-weight:700;text-decoration-thickness:1px;text-underline-offset:2px;white-space:nowrap}
+.program-price-discount strong{display:inline-flex;align-items:center;justify-content:center;padding:4px 7px;border-radius:999px;background:#f6e8bf;color:#76500d;font-size:9px;font-weight:900;letter-spacing:.35px;line-height:1.2;white-space:nowrap}
+.program-price-discount span{color:#78848a;font-size:8px;font-weight:650}
+.program-price-final{display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-width:0}
+.program-price-final>span{color:#667780;font-size:8px;font-weight:800;letter-spacing:.5px;line-height:1.35;text-transform:uppercase}
+.program-price-final>strong{color:#142b49;font-size:23px;font-weight:900;letter-spacing:-.6px;line-height:1.05;white-space:nowrap}
+.program-price-breakdown--replica{gap:3px;text-align:center}
+.program-price-breakdown--replica .program-price-original span{font-size:7px}
+.program-price-breakdown--replica .program-price-original del{font-size:10px}
+.program-price-breakdown--replica .program-price-discount{justify-content:center;gap:5px}
+.program-price-breakdown--replica .program-price-discount strong{padding:3px 6px;font-size:7px}
+.program-price-breakdown--replica .program-price-discount span{font-size:7px}
+.program-price-breakdown--replica .program-price-final{align-items:center;gap:1px}
+.program-price-breakdown--replica .program-price-final>span{font-size:7px}
+.program-price-breakdown--replica .program-price-final>strong{font-size:18px;letter-spacing:-.35px}
+.program-price-breakdown--home-card{gap:4px}
+.program-price-breakdown--home-card .program-price-original span{font-size:8px}
+.program-price-breakdown--home-card .program-price-original del{font-size:11px}
+.program-price-breakdown--home-card .program-price-discount strong{font-size:8px}
+.program-price-breakdown--home-card .program-price-final>strong{font-size:24px}
+.program-price-breakdown--course{justify-items:center;max-width:245px;gap:8px;text-align:center}
+.program-price-breakdown--course .program-price-original{width:100%}
+.program-price-breakdown--course .program-price-original span{font-size:10px}
+.program-price-breakdown--course .program-price-original del{font-size:13px}
+.program-price-breakdown--course .program-price-discount{justify-content:center;gap:7px}
+.program-price-breakdown--course .program-price-discount strong{padding:7px 12px;font-size:10px}
+.program-price-breakdown--course .program-price-discount span{font-size:9px}
+.program-price-breakdown--course .program-price-final{align-items:center;gap:4px}
+.program-price-breakdown--course .program-price-final>span{font-size:9px}
+.program-price-breakdown--course .program-price-final>strong{font-size:clamp(38px,5vw,54px);letter-spacing:-1.8px}
+.program-price-breakdown--enrol-option{gap:3px}
+.program-price-breakdown--enrol-option .program-price-original span{font-size:8px}
+.program-price-breakdown--enrol-option .program-price-original del{font-size:10px}
+.program-price-breakdown--enrol-option .program-price-discount strong{padding:3px 6px;font-size:8px}
+.program-price-breakdown--enrol-option .program-price-discount span{font-size:7px}
+.program-price-breakdown--enrol-option .program-price-final{flex-direction:row;align-items:baseline;justify-content:space-between;gap:7px}
+.program-price-breakdown--enrol-option .program-price-final>span{font-size:7px}
+.program-price-breakdown--enrol-option .program-price-final>strong{font-size:19px}
+.program-price-breakdown--enrol-aside{gap:5px}
+.program-price-breakdown--enrol-aside .program-price-final>strong{font-size:25px}
+.program-price-breakdown--enrol-review{margin:7px 0}
+.program-price-breakdown--enrol-review .program-price-final{flex-direction:row;align-items:baseline;justify-content:space-between;padding-top:7px;border-top:1px dashed #d8d8d0}
+.program-price-breakdown--enrol-review .program-price-final>strong{font-size:22px}
+.program-price-breakdown--receipt{gap:7px}
+.program-price-breakdown--receipt .program-price-original span,.program-price-breakdown--receipt .program-price-discount span{font-size:8px}
+.program-price-breakdown--receipt .program-price-final{flex-direction:row;align-items:baseline;justify-content:space-between;gap:8px;padding-top:7px;border-top:1px dashed rgba(20,43,73,.18)}
+.program-price-breakdown--receipt .program-price-final>span{font-size:8px}
+.program-price-breakdown--receipt .program-price-final>strong{font-size:23px}
+.replica-program-actions{display:grid;width:min(190px,46%);min-width:0;gap:6px;justify-items:stretch}
+.replica-program-footer .replica-program-actions .program-enrol,.replica-program-footer .replica-program-actions .program-view{display:flex;width:100%;min-width:0;min-height:35px;align-items:center;justify-content:center;gap:7px;padding:7px 9px;border-radius:999px;font-size:10px;font-weight:850;white-space:nowrap}
+.replica-program-footer .replica-program-actions .program-enrol{background:#f3c34e;color:#071f43}
+.replica-program-footer .replica-program-actions .program-enrol:hover{background:#ffda70}
+.replica-program-footer .replica-program-actions .program-view{background:#071f43;color:#fff}
+.replica-program-footer .replica-program-actions .program-view:hover{background:#0c2b53}
+.replica-fee-box{min-height:86px!important;min-width:124px!important;padding:6px 8px!important;gap:4px!important}
+.replica-fee-box .program-price-breakdown{width:100%}
+.replica-fee-box .program-price-breakdown--replica .program-price-original span,.replica-fee-box .program-price-breakdown--replica .program-price-final>span{color:#5e5a4b}
+.replica-fee-box>span{font-size:8px!important}
+.home-program-price .program-price-breakdown{margin-top:5px}
+.home-program-price .program-price-breakdown--home-card .program-price-final>strong{color:#142b49}
+.course-price-panel .program-price-breakdown{margin:0 0 8px}
+.enrol-program-price .program-price-breakdown{width:100%}
+.enrol-aside-fee .program-price-breakdown{grid-column:1/-1;width:100%;margin-top:4px}
+.enrol-receipt-total .program-price-breakdown{width:100%}
+@media(max-width:640px){.replica-program-footer{gap:7px}.replica-program-actions{width:46%;gap:5px}.replica-program-footer .replica-program-actions .program-enrol,.replica-program-footer .replica-program-actions .program-view{min-height:33px;padding-inline:7px;font-size:9px}.replica-fee-box{min-width:114px!important;min-height:82px!important;padding-inline:6px!important}.program-price-breakdown--replica .program-price-final>strong{font-size:17px}}
