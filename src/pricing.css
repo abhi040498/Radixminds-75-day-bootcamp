@@ -73,3 +73,188 @@
 .enrol-receipt-total>small{grid-column:1/-1;color:#a66d24;font-size:8px;font-weight:850;letter-spacing:1.1px}
 .enrol-receipt-total .program-price-breakdown{min-width:0}
 .course-price-panel .program-price-original del{margin-top:0}
+
+/* Homepage programme cards: keep copy and action/price footer in separate layout rows. */
+.homepage-programs-section .homepage-compact-card{
+  display:grid!important;
+  grid-template-rows:minmax(0,1fr) auto;
+  align-content:stretch;
+  gap:16px;
+  height:auto!important;
+  min-height:316px!important;
+  padding:22px!important;
+}
+.homepage-programs-section .homepage-compact-card .replica-program-copy{
+  width:calc(100% - 142px);
+  max-width:calc(100% - 142px);
+  min-width:0;
+}
+.homepage-programs-section .homepage-compact-card .compact-card-top{
+  flex-wrap:wrap;
+  gap:7px;
+  margin-bottom:15px;
+}
+.homepage-programs-section .homepage-compact-card h3{
+  max-width:100%;
+  margin:0 0 7px;
+  font-size:clamp(22px,2vw,27px);
+  line-height:1.08;
+}
+.homepage-programs-section .homepage-compact-card .replica-program-copy>p{
+  max-width:100%;
+  display:-webkit-box;
+  overflow:hidden;
+  -webkit-box-orient:vertical;
+  -webkit-line-clamp:2;
+  line-clamp:2;
+  font-size:12px!important;
+  line-height:1.5!important;
+}
+.homepage-programs-section .homepage-compact-card .replica-program-art{
+  top:66px;
+  right:19px;
+  width:132px;
+  height:112px;
+}
+.homepage-programs-section .homepage-compact-card .replica-program-art.is-science{
+  top:61px;
+  right:16px;
+  width:136px;
+  height:118px;
+}
+.homepage-programs-section .homepage-compact-card .replica-program-footer{
+  position:relative!important;
+  inset:auto!important;
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(158px,36%);
+  align-items:end;
+  gap:14px;
+  width:100%;
+  margin:0;
+}
+.homepage-programs-section .homepage-compact-card .replica-program-actions{
+  display:grid;
+  width:100%;
+  max-width:225px;
+  min-width:0;
+  gap:8px;
+}
+.homepage-programs-section .homepage-compact-card .replica-program-actions .program-enrol,
+.homepage-programs-section .homepage-compact-card .replica-program-actions .program-view{
+  width:100%;
+  min-width:0;
+  min-height:40px;
+  justify-content:center;
+  padding:8px 12px;
+  font-size:11px;
+  line-height:1.2;
+}
+.homepage-programs-section .homepage-compact-card .replica-fee-box{
+  width:100%;
+  min-width:0!important;
+  min-height:108px!important;
+  padding:8px 10px!important;
+  gap:5px!important;
+}
+.homepage-programs-section .homepage-compact-card .replica-fee-box .program-price-breakdown{
+  width:100%;
+}
+.homepage-programs-section .homepage-compact-card .replica-fee-box>span{
+  font-size:8px!important;
+}
+@media(max-width:640px){
+  .homepage-programs-section .homepage-compact-card{
+    min-height:304px!important;
+    gap:14px;
+    padding:18px 16px 16px!important;
+  }
+  .homepage-programs-section .homepage-compact-card .replica-program-copy{
+    width:calc(100% - 124px);
+    max-width:calc(100% - 124px);
+  }
+  .homepage-programs-section .homepage-compact-card .compact-card-top{
+    gap:5px;
+    margin-bottom:13px;
+  }
+  .homepage-programs-section .homepage-compact-card .compact-card-top>span:first-child{
+    padding:6px 9px;
+    font-size:9px;
+  }
+  .homepage-programs-section .homepage-compact-card .compact-card-top>.board-options{
+    padding:5px 7px;
+    font-size:7px;
+  }
+  .homepage-programs-section .homepage-compact-card h3{
+    max-width:100%;
+    font-size:clamp(21px,5.2vw,25px);
+    line-height:1.08;
+  }
+  .homepage-programs-section .homepage-compact-card .replica-program-copy>p{
+    max-width:100%;
+    font-size:11px!important;
+    line-height:1.45!important;
+  }
+  .homepage-programs-section .homepage-compact-card .replica-program-art{
+    top:63px;
+    right:9px;
+    width:116px;
+    height:98px;
+  }
+  .homepage-programs-section .homepage-compact-card .replica-program-art.is-science{
+    top:60px;
+    right:7px;
+    width:116px;
+    height:100px;
+  }
+  .homepage-programs-section .homepage-compact-card .replica-program-footer{
+    grid-template-columns:minmax(0,1fr) minmax(146px,38%);
+    gap:10px;
+  }
+  .homepage-programs-section .homepage-compact-card .replica-program-actions{
+    gap:7px;
+  }
+  .homepage-programs-section .homepage-compact-card .replica-program-actions .program-enrol,
+  .homepage-programs-section .homepage-compact-card .replica-program-actions .program-view{
+    min-height:38px;
+    padding:7px 8px;
+    font-size:10px;
+  }
+  .homepage-programs-section .homepage-compact-card .replica-fee-box{
+    min-height:104px!important;
+    padding:7px 7px!important;
+  }
+}
+@media(max-width:390px){
+  .homepage-programs-section .homepage-compact-card{
+    min-height:314px!important;
+    padding:17px 13px 14px!important;
+  }
+  .homepage-programs-section .homepage-compact-card .replica-program-copy{
+    width:calc(100% - 104px);
+    max-width:calc(100% - 104px);
+  }
+  .homepage-programs-section .homepage-compact-card .replica-program-art,
+  .homepage-programs-section .homepage-compact-card .replica-program-art.is-science{
+    top:65px;
+    right:7px;
+    width:96px;
+    height:84px;
+  }
+  .homepage-programs-section .homepage-compact-card .replica-program-footer{
+    grid-template-columns:minmax(0,1fr) 132px;
+    gap:8px;
+  }
+  .homepage-programs-section .homepage-compact-card .replica-program-actions .program-enrol,
+  .homepage-programs-section .homepage-compact-card .replica-program-actions .program-view{
+    min-height:37px;
+    padding:7px 5px;
+    font-size:9px;
+  }
+  .homepage-programs-section .homepage-compact-card .replica-fee-box{
+    min-height:102px!important;
+    padding:6px 5px!important;
+  }
+  .homepage-programs-section .homepage-compact-card .program-price-breakdown--replica .program-price-final>strong{
+    font-size:16px;
+  }
+}
