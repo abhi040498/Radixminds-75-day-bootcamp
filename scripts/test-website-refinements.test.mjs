@@ -13,7 +13,7 @@ test('homepage programme CTA opens the combined Programs route', async () => {
   assert.doesNotMatch(hero, /href="#programs"/)
 })
 
-test('Programs page uses the illustrated cards with separate class and board badges and two actions', async () => {
+test('Programs page uses illustrated cards with two actions and compact three-part offer pricing', async () => {
   const cards = await source('src/components/sections/ProgramSelection.tsx')
   const programsPage = await source('src/pages/PublicPages.tsx')
   assert.match(cards, /className="compact-card-top">\s*<span>\{grade\.toUpperCase\(\)\}<\/span>\s*<span className="board-options">CBSE · ICSE · STATE BOARD/)
@@ -21,7 +21,17 @@ test('Programs page uses the illustrated cards with separate class and board bad
   assert.match(cards, /className="program-view">Explore/)
   assert.match(cards, /to=\{`\/enrol\?program=\$\{code\}`\}/)
   assert.match(cards, /to=\{`\/programs\/\$\{code\}`\}/)
-  assert.match(cards, /formatINR\(program\?\.payablePaise \?\? fallbackFeePaise \?\? 0\)/)
+  assert.match(cards, /const payablePaise = program\?\.payablePaise \?\? fallbackFeePaise \?\? 0/)
+  assert.match(cards, /const discountPercent = program\?\.discountPercent \?\? 80/)
+  assert.match(cards, /program\?\.standardPaise \?\? calculatedStandardPaise/)
+  assert.match(cards, /Math.round\(payablePaise \/ \(1 - discountPercent \/ 100\)\)/)
+  assert.match(cards, /className="replica-fee-original"/)
+  assert.match(cards, /className="replica-fee-discount">\{discountPercent\}% OFF/)
+  assert.match(cards, /<strong>\{formatINR\(payablePaise\)\}<\/strong>/)
+  assert.doesNotMatch(cards, /-Day Programme/)
+  const cardStyles = await source('src/homepage-redesign.css')
+  assert.match(cardStyles, /\.replica-fee-box \.replica-fee-original/)
+  assert.match(cardStyles, /\.replica-fee-box \.replica-fee-discount/)
   assert.match(cards, /useProgramCatalog\(\)/)
   assert.match(programsPage, /<ProgramSelection[^>]+compactListings \/>/)
 })
