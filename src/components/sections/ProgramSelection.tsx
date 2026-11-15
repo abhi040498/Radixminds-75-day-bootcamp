@@ -46,8 +46,8 @@ function HomepageProgramCard({ program, index, tone, fallbackFeePaise, fallbackS
     </div>
     <div className="replica-program-footer">
       <div className="replica-program-actions">
-        <Link to={`/enrol?program=${code}`} className="program-enrol">Enroll Now <ArrowUpRight size={16} /></Link>
-        <Link to={`/programs/${code}`} className="program-view">Explore {grade} <ArrowRight size={16} /></Link>
+        <Link to={`/enrol?program=${code}`} className="program-enrol">Enroll <ArrowUpRight size={15} /></Link>
+        <Link to={`/programs/${code}`} className="program-view">Explore <ArrowRight size={15} /></Link>
       </div>
       <div className="replica-fee-box">
         <ProgramPriceBreakdown
