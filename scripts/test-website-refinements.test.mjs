@@ -76,7 +76,7 @@ test('all public program price displays include original fee, discount and final
   assert.match(breakdown, /Original price/)
   assert.match(breakdown, /% OFF/)
   assert.match(breakdown, /Final price/)
-  assert.match(cards, /ProgramPriceBreakdown\\s+variant="replica"/)
+  assert.match(cards, /ProgramPriceBreakdown\s+variant="replica"/)
   assert.match(cards, /fallbackStandardFeePaise/)
   assert.match(detailPages, /ProgramPriceBreakdown variant="course"/)
   assert.match(enrolment, /ProgramPriceBreakdown variant="enrol-option"/)
