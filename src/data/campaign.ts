@@ -5,7 +5,7 @@ export const campaign = {
   businessAddress: 'Bokaro, Jharkhand – 829301',
   batchCapacity: 30,
   contact: {
-    phones: ['9304829718'],
+    phones: ['9304829718', '9709197646'],
     whatsappPhone: '9304829718',
     telegramUrl: 'https://t.me/radixminds',
     email: 'support@bootcamp.radixminds.in',
@@ -16,6 +16,8 @@ export const campaign = {
       grade: 'CLASS 10',
       subjects: ['Mathematics', 'Science', 'Social Science', 'English'],
       fallbackFeePaise: 249900,
+      fallbackStandardFeePaise: 1249500,
+      fallbackDiscountPercent: 80,
       durationDays: 75,
     },
     {
@@ -23,6 +25,8 @@ export const campaign = {
       grade: 'CLASS 12',
       subjects: ['Physics', 'Chemistry', 'Mathematics or Biology'],
       fallbackFeePaise: 349900,
+      fallbackStandardFeePaise: 1749500,
+      fallbackDiscountPercent: 80,
       durationDays: 75,
     },
   ],
