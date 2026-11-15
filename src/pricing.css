@@ -419,11 +419,12 @@
 
 /* Refined compact programme card: balanced proportions and tighter footer. */
 .homepage-programs-section .homepage-compact-card{
-  height:352px!important;
-  min-height:352px!important;
-  grid-template-rows:minmax(0,1fr) auto;
-  align-content:stretch;
-  gap:12px;
+  height:auto!important;
+  min-height:0!important;
+  grid-template-rows:auto auto;
+  align-content:start;
+  align-self:start;
+  gap:16px;
   padding:18px 20px 16px!important;
 }
 .homepage-programs-section .homepage-compact-card .replica-program-copy{
@@ -500,8 +501,9 @@
 }
 @media(max-width:640px){
   .homepage-programs-section .homepage-compact-card{
-    height:352px!important;
-    min-height:352px!important;
+    height:auto!important;
+    min-height:0!important;
+    gap:15px;
     padding:17px 17px 15px!important;
   }
   .homepage-programs-section .homepage-compact-card .replica-program-copy{
@@ -550,8 +552,9 @@
 }
 @media(max-width:390px){
   .homepage-programs-section .homepage-compact-card{
-    height:334px!important;
-    min-height:334px!important;
+    height:auto!important;
+    min-height:0!important;
+    gap:14px;
     padding:15px 13px 13px!important;
   }
   .homepage-programs-section .homepage-compact-card .replica-program-copy{
