@@ -66,3 +66,10 @@
 .enrol-aside-fee .program-price-breakdown{grid-column:1/-1;width:100%;margin-top:4px}
 .enrol-receipt-total .program-price-breakdown{width:100%}
 @media(max-width:640px){.replica-program-footer{gap:7px}.replica-program-actions{width:46%;gap:5px}.replica-program-footer .replica-program-actions .program-enrol,.replica-program-footer .replica-program-actions .program-view{min-height:33px;padding-inline:7px;font-size:9px}.replica-fee-box{min-width:114px!important;min-height:82px!important;padding-inline:6px!important}.program-price-breakdown--replica .program-price-final>strong{font-size:17px}}
+
+/* Keep shared breakdowns in their intended stacked layout inside existing flex/grid fee containers. */
+.enrol-fee-lines>.program-price-breakdown{display:grid;grid-template-columns:minmax(0,1fr)}
+.enrol-receipt-total{display:grid!important;grid-template-columns:minmax(0,1fr);gap:6px!important;align-items:start!important}
+.enrol-receipt-total>small{grid-column:1/-1;color:#a66d24;font-size:8px;font-weight:850;letter-spacing:1.1px}
+.enrol-receipt-total .program-price-breakdown{min-width:0}
+.course-price-panel .program-price-original del{margin-top:0}
