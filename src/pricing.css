@@ -258,3 +258,79 @@
     font-size:16px;
   }
 }
+
+/* Compact programme actions: two equal buttons in one footer row. */
+.homepage-programs-section{
+  height:auto!important;
+  min-height:0!important;
+  padding-top:28px;
+  padding-bottom:26px;
+}
+.homepage-programs-section .page-wrap{
+  height:auto!important;
+  align-items:center;
+}
+.homepage-programs-section .homepage-compact-card{
+  min-height:294px!important;
+}
+.homepage-programs-section .homepage-compact-card .replica-program-actions{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  width:100%;
+  max-width:250px;
+  min-width:0;
+  gap:8px;
+}
+.homepage-programs-section .homepage-compact-card .replica-program-actions .program-enrol,
+.homepage-programs-section .homepage-compact-card .replica-program-actions .program-view{
+  min-width:0;
+  min-height:42px;
+  gap:5px;
+  padding:8px 7px;
+  font-size:10px;
+  line-height:1.1;
+  white-space:nowrap;
+}
+.homepage-programs-section .homepage-compact-card .replica-program-actions svg{
+  width:13px;
+  height:13px;
+  flex:none;
+}
+@media(max-width:640px){
+  .homepage-programs-section{
+    padding-top:30px;
+    padding-bottom:26px;
+  }
+  .homepage-programs-section .page-wrap{
+    height:auto!important;
+    align-items:stretch;
+  }
+  .homepage-programs-section .homepage-compact-card{
+    min-height:286px!important;
+  }
+  .homepage-programs-section .homepage-compact-card .replica-program-actions{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:6px;
+  }
+  .homepage-programs-section .homepage-compact-card .replica-program-actions .program-enrol,
+  .homepage-programs-section .homepage-compact-card .replica-program-actions .program-view{
+    min-height:38px;
+    padding:6px 5px;
+    gap:3px;
+    font-size:9px;
+  }
+  .homepage-programs-section .homepage-compact-card .replica-program-actions svg{
+    width:11px;
+    height:11px;
+  }
+}
+@media(max-width:390px){
+  .homepage-programs-section .homepage-compact-card .replica-program-actions{
+    gap:5px;
+  }
+  .homepage-programs-section .homepage-compact-card .replica-program-actions .program-enrol,
+  .homepage-programs-section .homepage-compact-card .replica-program-actions .program-view{
+    padding-inline:3px;
+    font-size:8px;
+  }
+}
