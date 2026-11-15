@@ -56,7 +56,6 @@ function HomepageProgramCard({ program, index, tone, fallbackFeePaise, fallbackS
           discountPercent={program ? program.discountPercent : fallbackDiscountPercent ?? null}
           finalPaise={program?.payablePaise ?? fallbackFeePaise ?? 0}
         />
-        <span>{(program?.durationDays ?? durationDays ?? 75)}-Day Programme</span>
       </div>
     </div>
   </article>

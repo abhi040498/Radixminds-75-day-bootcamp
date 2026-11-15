@@ -82,6 +82,14 @@ test('all public program price displays include original fee, discount and final
   assert.match(enrolment, /ProgramPriceBreakdown variant="enrol-option"/)
   assert.match(enrolment, /ProgramPriceBreakdown variant="enrol-aside"/)
   assert.match(enrolment, /ProgramPriceBreakdown variant="receipt"/)
+  assert.match(breakdown, /variant !== 'replica' && <span>Original price<\\/span>/)
+  assert.match(breakdown, /variant !== 'replica' && <span>discount<\\/span>/)
+  assert.match(breakdown, /variant !== 'replica' && <span>\\{finalLabel\\}<\\/span>/)
+  const replicaCard = cards.slice(cards.indexOf('function HomepageProgramCard'), cards.indexOf('function BookStackArtwork'))
+  assert.doesNotMatch(replicaCard, /replica-fee-box[\\s\\S]*?-Day Programme/)
+  const pricingStyles = await source('src/pricing.css')
+  assert.match(pricingStyles, /Compact programme-card price panel: original, discount, final price only/)
+  assert.match(pricingStyles, /replica-fee-box[\\s\\S]*?box-shadow:0 7px 17px/)
 })
 
 test('secondary number is displayed while primary WhatsApp number stays unchanged', async () => {

@@ -334,3 +334,84 @@
     font-size:8px;
   }
 }
+
+
+/* Compact programme-card price panel: original, discount, final price only. */
+.homepage-programs-section .homepage-compact-card .replica-fee-box{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  min-height:94px!important;
+  padding:9px 13px!important;
+  gap:0!important;
+  border:1px solid #e9bd43;
+  border-radius:14px;
+  background:linear-gradient(180deg,#fff8df 0%,#fff0bd 100%);
+  box-shadow:0 7px 17px rgba(7,31,67,.09);
+}
+.homepage-programs-section .homepage-compact-card .replica-fee-box .program-price-breakdown--replica{
+  display:grid;
+  grid-template-columns:minmax(0,1fr);
+  justify-items:center;
+  gap:4px;
+  width:100%;
+  text-align:center;
+}
+.homepage-programs-section .homepage-compact-card .program-price-breakdown--replica .program-price-original{
+  width:100%;
+  justify-content:center;
+  gap:0;
+}
+.homepage-programs-section .homepage-compact-card .program-price-breakdown--replica .program-price-original del{
+  color:#788397;
+  font-size:11px;
+  font-weight:700;
+  line-height:1;
+  text-decoration-thickness:1.5px;
+  text-underline-offset:2px;
+}
+.homepage-programs-section .homepage-compact-card .program-price-breakdown--replica .program-price-discount{
+  justify-content:center;
+  gap:0;
+}
+.homepage-programs-section .homepage-compact-card .program-price-breakdown--replica .program-price-discount strong{
+  padding:3px 10px;
+  border-radius:999px;
+  background:#ffe29a;
+  color:#684a08;
+  font-size:8px;
+  font-weight:900;
+  letter-spacing:.3px;
+}
+.homepage-programs-section .homepage-compact-card .program-price-breakdown--replica .program-price-final{
+  align-items:center;
+  gap:0;
+}
+.homepage-programs-section .homepage-compact-card .program-price-breakdown--replica .program-price-final>strong{
+  color:#071f43;
+  font-size:24px;
+  font-weight:900;
+  letter-spacing:-.55px;
+  line-height:1.04;
+}
+@media(max-width:640px){
+  .homepage-programs-section .homepage-compact-card .replica-fee-box{
+    min-height:90px!important;
+    padding:8px 8px!important;
+  }
+  .homepage-programs-section .homepage-compact-card .program-price-breakdown--replica .program-price-final>strong{
+    font-size:22px;
+  }
+  .homepage-programs-section .homepage-compact-card .program-price-breakdown--replica .program-price-original del{
+    font-size:10px;
+  }
+}
+@media(max-width:390px){
+  .homepage-programs-section .homepage-compact-card .replica-fee-box{
+    min-height:86px!important;
+    padding:7px 5px!important;
+  }
+  .homepage-programs-section .homepage-compact-card .program-price-breakdown--replica .program-price-final>strong{
+    font-size:19px;
+  }
+}

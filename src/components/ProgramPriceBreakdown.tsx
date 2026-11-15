@@ -29,17 +29,17 @@ export function ProgramPriceBreakdown({
       {hasDiscount && (
         <>
           <div className="program-price-original">
-            <span>Original price</span>
+            {variant !== 'replica' && <span>Original price</span>}
             <del>{formatINR(originalPaise!)}</del>
           </div>
           <div className="program-price-discount">
             <strong>{discountPercent}% OFF</strong>
-            <span>discount</span>
+            {variant !== 'replica' && <span>discount</span>}
           </div>
         </>
       )}
       <div className="program-price-final">
-        <span>{finalLabel}</span>
+        {variant !== 'replica' && <span>{finalLabel}</span>}
         <strong>{formatINR(finalPaise)}</strong>
       </div>
     </div>
