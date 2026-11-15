@@ -93,3 +93,11 @@ test('secondary number is displayed while primary WhatsApp number stays unchange
   assert.match(footer, /campaign\.contact\.phones\.map/)
   assert.match(contactPage, /campaign\.contact\.phones\.map/)
 })
+
+test('homepage programme cards reserve separate layout rows for copy and the CTA/pricing footer', async () => {
+  const pricingStyles = await source('src/pricing.css')
+  assert.match(pricingStyles, /homepage-compact-card\{[\s\S]*?grid-template-rows:minmax\(0,1fr\) auto/)
+  assert.match(pricingStyles, /replica-program-footer\{[\s\S]*?position:relative!important/)
+  assert.match(pricingStyles, /replica-program-copy>p\{[\s\S]*?-webkit-line-clamp:2/)
+  assert.match(pricingStyles, /@media\(max-width:640px\)/)
+})
