@@ -90,6 +90,11 @@ test('all public program price displays include original fee, discount and final
   const pricingStyles = await source('src/pricing.css')
   assert.ok(pricingStyles.includes('Compact programme-card price panel: original, discount, final price only'))
   assert.ok(pricingStyles.includes('box-shadow:0 7px 17px'))
+  assert.ok(pricingStyles.includes('Refined compact programme card: balanced proportions and tighter footer.'))
+  assert.ok(pricingStyles.includes('height:352px!important'))
+  assert.ok(pricingStyles.includes('min-height:82px!important'))
+  assert.ok(pricingStyles.includes('height:334px!important'))
+
 })
 
 test('secondary number is displayed while primary WhatsApp number stays unchanged', async () => {
