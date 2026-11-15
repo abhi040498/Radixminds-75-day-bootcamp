@@ -419,11 +419,12 @@
 
 /* Refined compact programme card: balanced proportions and tighter footer. */
 .homepage-programs-section .homepage-compact-card{
+  display:flex!important;
+  flex-direction:column;
+  justify-content:flex-start!important;
+  align-items:stretch;
   height:auto!important;
   min-height:0!important;
-  grid-template-rows:auto auto;
-  align-content:start;
-  align-self:start;
   gap:16px;
   padding:18px 20px 16px!important;
 }
