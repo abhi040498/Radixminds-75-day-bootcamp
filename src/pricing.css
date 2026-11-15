@@ -1,0 +1,617 @@
+.program-price-breakdown{display:grid;width:100%;min-width:0;gap:5px;color:#142b49;text-align:left}
+.program-price-original,.program-price-discount{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0}
+.program-price-original span{color:#71808a;font-size:9px;font-weight:650;line-height:1.3}
+.program-price-original del{color:#7b858b;font-size:11px;font-weight:700;text-decoration-thickness:1px;text-underline-offset:2px;white-space:nowrap}
+.program-price-discount strong{display:inline-flex;align-items:center;justify-content:center;padding:4px 7px;border-radius:999px;background:#f6e8bf;color:#76500d;font-size:9px;font-weight:900;letter-spacing:.35px;line-height:1.2;white-space:nowrap}
+.program-price-discount span{color:#78848a;font-size:8px;font-weight:650}
+.program-price-final{display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-width:0}
+.program-price-final>span{color:#667780;font-size:8px;font-weight:800;letter-spacing:.5px;line-height:1.35;text-transform:uppercase}
+.program-price-final>strong{color:#142b49;font-size:23px;font-weight:900;letter-spacing:-.6px;line-height:1.05;white-space:nowrap}
+.program-price-breakdown--replica{gap:3px;text-align:center}
+.program-price-breakdown--replica .program-price-original span{font-size:7px}
+.program-price-breakdown--replica .program-price-original del{font-size:10px}
+.program-price-breakdown--replica .program-price-discount{justify-content:center;gap:5px}
+.program-price-breakdown--replica .program-price-discount strong{padding:3px 6px;font-size:7px}
+.program-price-breakdown--replica .program-price-discount span{font-size:7px}
+.program-price-breakdown--replica .program-price-final{align-items:center;gap:1px}
+.program-price-breakdown--replica .program-price-final>span{font-size:7px}
+.program-price-breakdown--replica .program-price-final>strong{font-size:18px;letter-spacing:-.35px}
+.program-price-breakdown--home-card{gap:4px}
+.program-price-breakdown--home-card .program-price-original span{font-size:8px}
+.program-price-breakdown--home-card .program-price-original del{font-size:11px}
+.program-price-breakdown--home-card .program-price-discount strong{font-size:8px}
+.program-price-breakdown--home-card .program-price-final>strong{font-size:24px}
+.program-price-breakdown--course{justify-items:center;max-width:245px;gap:8px;text-align:center}
+.program-price-breakdown--course .program-price-original{width:100%}
+.program-price-breakdown--course .program-price-original span{font-size:10px}
+.program-price-breakdown--course .program-price-original del{font-size:13px}
+.program-price-breakdown--course .program-price-discount{justify-content:center;gap:7px}
+.program-price-breakdown--course .program-price-discount strong{padding:7px 12px;font-size:10px}
+.program-price-breakdown--course .program-price-discount span{font-size:9px}
+.program-price-breakdown--course .program-price-final{align-items:center;gap:4px}
+.program-price-breakdown--course .program-price-final>span{font-size:9px}
+.program-price-breakdown--course .program-price-final>strong{font-size:clamp(38px,5vw,54px);letter-spacing:-1.8px}
+.program-price-breakdown--enrol-option{gap:3px}
+.program-price-breakdown--enrol-option .program-price-original span{font-size:8px}
+.program-price-breakdown--enrol-option .program-price-original del{font-size:10px}
+.program-price-breakdown--enrol-option .program-price-discount strong{padding:3px 6px;font-size:8px}
+.program-price-breakdown--enrol-option .program-price-discount span{font-size:7px}
+.program-price-breakdown--enrol-option .program-price-final{flex-direction:row;align-items:baseline;justify-content:space-between;gap:7px}
+.program-price-breakdown--enrol-option .program-price-final>span{font-size:7px}
+.program-price-breakdown--enrol-option .program-price-final>strong{font-size:19px}
+.program-price-breakdown--enrol-aside{gap:5px}
+.program-price-breakdown--enrol-aside .program-price-final>strong{font-size:25px}
+.program-price-breakdown--enrol-review{margin:7px 0}
+.program-price-breakdown--enrol-review .program-price-final{flex-direction:row;align-items:baseline;justify-content:space-between;padding-top:7px;border-top:1px dashed #d8d8d0}
+.program-price-breakdown--enrol-review .program-price-final>strong{font-size:22px}
+.program-price-breakdown--receipt{gap:7px}
+.program-price-breakdown--receipt .program-price-original span,.program-price-breakdown--receipt .program-price-discount span{font-size:8px}
+.program-price-breakdown--receipt .program-price-final{flex-direction:row;align-items:baseline;justify-content:space-between;gap:8px;padding-top:7px;border-top:1px dashed rgba(20,43,73,.18)}
+.program-price-breakdown--receipt .program-price-final>span{font-size:8px}
+.program-price-breakdown--receipt .program-price-final>strong{font-size:23px}
+.replica-program-actions{display:grid;width:min(190px,46%);min-width:0;gap:6px;justify-items:stretch}
+.replica-program-footer .replica-program-actions .program-enrol,.replica-program-footer .replica-program-actions .program-view{display:flex;width:100%;min-width:0;min-height:35px;align-items:center;justify-content:center;gap:7px;padding:7px 9px;border-radius:999px;font-size:10px;font-weight:850;white-space:nowrap}
+.replica-program-footer .replica-program-actions .program-enrol{background:#f3c34e;color:#071f43}
+.replica-program-footer .replica-program-actions .program-enrol:hover{background:#ffda70}
+.replica-program-footer .replica-program-actions .program-view{background:#071f43;color:#fff}
+.replica-program-footer .replica-program-actions .program-view:hover{background:#0c2b53}
+.replica-fee-box{min-height:86px!important;min-width:124px!important;padding:6px 8px!important;gap:4px!important}
+.replica-fee-box .program-price-breakdown{width:100%}
+.replica-fee-box .program-price-breakdown--replica .program-price-original span,.replica-fee-box .program-price-breakdown--replica .program-price-final>span{color:#5e5a4b}
+.replica-fee-box>span{font-size:8px!important}
+.home-program-price .program-price-breakdown{margin-top:5px}
+.home-program-price .program-price-breakdown--home-card .program-price-final>strong{color:#142b49}
+.course-price-panel .program-price-breakdown{margin:0 0 8px}
+.enrol-program-price .program-price-breakdown{width:100%}
+.enrol-aside-fee .program-price-breakdown{grid-column:1/-1;width:100%;margin-top:4px}
+.enrol-receipt-total .program-price-breakdown{width:100%}
+@media(max-width:640px){.replica-program-footer{gap:7px}.replica-program-actions{width:46%;gap:5px}.replica-program-footer .replica-program-actions .program-enrol,.replica-program-footer .replica-program-actions .program-view{min-height:33px;padding-inline:7px;font-size:9px}.replica-fee-box{min-width:114px!important;min-height:82px!important;padding-inline:6px!important}.program-price-breakdown--replica .program-price-final>strong{font-size:17px}}
+
+/* Keep shared breakdowns in their intended stacked layout inside existing flex/grid fee containers. */
+.enrol-fee-lines>.program-price-breakdown{display:grid;grid-template-columns:minmax(0,1fr)}
+.enrol-receipt-total{display:grid!important;grid-template-columns:minmax(0,1fr);gap:6px!important;align-items:start!important}
+.enrol-receipt-total>small{grid-column:1/-1;color:#a66d24;font-size:8px;font-weight:850;letter-spacing:1.1px}
+.enrol-receipt-total .program-price-breakdown{min-width:0}
+.course-price-panel .program-price-original del{margin-top:0}
+
+/* Homepage programme cards: keep copy and action/price footer in separate layout rows. */
+.homepage-programs-section .homepage-compact-card{
+  display:grid!important;
+  grid-template-rows:minmax(0,1fr) auto;
+  align-content:stretch;
+  gap:16px;
+  height:auto!important;
+  min-height:316px!important;
+  padding:22px!important;
+}
+.homepage-programs-section .homepage-compact-card .replica-program-copy{
+  width:calc(100% - 142px);
+  max-width:calc(100% - 142px);
+  min-width:0;
+}
+.homepage-programs-section .homepage-compact-card .compact-card-top{
+  flex-wrap:wrap;
+  gap:7px;
+  margin-bottom:15px;
+}
+.homepage-programs-section .homepage-compact-card h3{
+  max-width:100%;
+  margin:0 0 7px;
+  font-size:clamp(22px,2vw,27px);
+  line-height:1.08;
+}
+.homepage-programs-section .homepage-compact-card .replica-program-copy>p{
+  max-width:100%;
+  display:-webkit-box;
+  overflow:hidden;
+  -webkit-box-orient:vertical;
+  -webkit-line-clamp:2;
+  line-clamp:2;
+  font-size:12px!important;
+  line-height:1.5!important;
+}
+.homepage-programs-section .homepage-compact-card .replica-program-art{
+  top:66px;
+  right:19px;
+  width:132px;
+  height:112px;
+}
+.homepage-programs-section .homepage-compact-card .replica-program-art.is-science{
+  top:61px;
+  right:16px;
+  width:136px;
+  height:118px;
+}
+.homepage-programs-section .homepage-compact-card .replica-program-footer{
+  position:relative!important;
+  inset:auto!important;
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(158px,36%);
+  align-items:end;
+  gap:14px;
+  width:100%;
+  margin:0;
+}
+.homepage-programs-section .homepage-compact-card .replica-program-actions{
+  display:grid;
+  width:100%;
+  max-width:225px;
+  min-width:0;
+  gap:8px;
+}
+.homepage-programs-section .homepage-compact-card .replica-program-actions .program-enrol,
+.homepage-programs-section .homepage-compact-card .replica-program-actions .program-view{
+  width:100%;
+  min-width:0;
+  min-height:40px;
+  justify-content:center;
+  padding:8px 12px;
+  font-size:11px;
+  line-height:1.2;
+}
+.homepage-programs-section .homepage-compact-card .replica-fee-box{
+  width:100%;
+  min-width:0!important;
+  min-height:108px!important;
+  padding:8px 10px!important;
+  gap:5px!important;
+}
+.homepage-programs-section .homepage-compact-card .replica-fee-box .program-price-breakdown{
+  width:100%;
+}
+.homepage-programs-section .homepage-compact-card .replica-fee-box>span{
+  font-size:8px!important;
+}
+@media(max-width:640px){
+  .homepage-programs-section .homepage-compact-card{
+    min-height:304px!important;
+    gap:14px;
+    padding:18px 16px 16px!important;
+  }
+  .homepage-programs-section .homepage-compact-card .replica-program-copy{
+    width:calc(100% - 124px);
+    max-width:calc(100% - 124px);
+  }
+  .homepage-programs-section .homepage-compact-card .compact-card-top{
+    gap:5px;
+    margin-bottom:13px;
+  }
+  .homepage-programs-section .homepage-compact-card .compact-card-top>span:first-child{
+    padding:6px 9px;
+    font-size:9px;
+  }
+  .homepage-programs-section .homepage-compact-card .compact-card-top>.board-options{
+    padding:5px 7px;
+    font-size:7px;
+  }
+  .homepage-programs-section .homepage-compact-card h3{
+    max-width:100%;
+    font-size:clamp(21px,5.2vw,25px);
+    line-height:1.08;
+  }
+  .homepage-programs-section .homepage-compact-card .replica-program-copy>p{
+    max-width:100%;
+    font-size:11px!important;
+    line-height:1.45!important;
+  }
+  .homepage-programs-section .homepage-compact-card .replica-program-art{
+    top:63px;
+    right:9px;
+    width:116px;
+    height:98px;
+  }
+  .homepage-programs-section .homepage-compact-card .replica-program-art.is-science{
+    top:60px;
+    right:7px;
+    width:116px;
+    height:100px;
+  }
+  .homepage-programs-section .homepage-compact-card .replica-program-footer{
+    grid-template-columns:minmax(0,1fr) minmax(146px,38%);
+    gap:10px;
+  }
+  .homepage-programs-section .homepage-compact-card .replica-program-actions{
+    gap:7px;
+  }
+  .homepage-programs-section .homepage-compact-card .replica-program-actions .program-enrol,
+  .homepage-programs-section .homepage-compact-card .replica-program-actions .program-view{
+    min-height:38px;
+    padding:7px 8px;
+    font-size:10px;
+  }
+  .homepage-programs-section .homepage-compact-card .replica-fee-box{
+    min-height:104px!important;
+    padding:7px 7px!important;
+  }
+}
+@media(max-width:390px){
+  .homepage-programs-section .homepage-compact-card{
+    min-height:314px!important;
+    padding:17px 13px 14px!important;
+  }
+  .homepage-programs-section .homepage-compact-card .replica-program-copy{
+    width:calc(100% - 104px);
+    max-width:calc(100% - 104px);
+  }
+  .homepage-programs-section .homepage-compact-card .replica-program-art,
+  .homepage-programs-section .homepage-compact-card .replica-program-art.is-science{
+    top:65px;
+    right:7px;
+    width:96px;
+    height:84px;
+  }
+  .homepage-programs-section .homepage-compact-card .replica-program-footer{
+    grid-template-columns:minmax(0,1fr) 132px;
+    gap:8px;
+  }
+  .homepage-programs-section .homepage-compact-card .replica-program-actions .program-enrol,
+  .homepage-programs-section .homepage-compact-card .replica-program-actions .program-view{
+    min-height:37px;
+    padding:7px 5px;
+    font-size:9px;
+  }
+  .homepage-programs-section .homepage-compact-card .replica-fee-box{
+    min-height:102px!important;
+    padding:6px 5px!important;
+  }
+  .homepage-programs-section .homepage-compact-card .program-price-breakdown--replica .program-price-final>strong{
+    font-size:16px;
+  }
+}
+
+/* Compact programme actions: two equal buttons in one footer row. */
+.homepage-programs-section{
+  height:auto!important;
+  min-height:0!important;
+  padding-top:28px;
+  padding-bottom:26px;
+}
+.homepage-programs-section .page-wrap{
+  height:auto!important;
+  align-items:center;
+}
+.homepage-programs-section .homepage-compact-card{
+  min-height:294px!important;
+}
+.homepage-programs-section .homepage-compact-card .replica-program-actions{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  width:100%;
+  max-width:250px;
+  min-width:0;
+  gap:8px;
+}
+.homepage-programs-section .homepage-compact-card .replica-program-actions .program-enrol,
+.homepage-programs-section .homepage-compact-card .replica-program-actions .program-view{
+  min-width:0;
+  min-height:42px;
+  gap:5px;
+  padding:8px 7px;
+  font-size:10px;
+  line-height:1.1;
+  white-space:nowrap;
+}
+.homepage-programs-section .homepage-compact-card .replica-program-actions svg{
+  width:13px;
+  height:13px;
+  flex:none;
+}
+@media(max-width:640px){
+  .homepage-programs-section{
+    padding-top:30px;
+    padding-bottom:26px;
+  }
+  .homepage-programs-section .page-wrap{
+    height:auto!important;
+    align-items:stretch;
+  }
+  .homepage-programs-section .homepage-compact-card{
+    min-height:286px!important;
+  }
+  .homepage-programs-section .homepage-compact-card .replica-program-actions{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:6px;
+  }
+  .homepage-programs-section .homepage-compact-card .replica-program-actions .program-enrol,
+  .homepage-programs-section .homepage-compact-card .replica-program-actions .program-view{
+    min-height:38px;
+    padding:6px 5px;
+    gap:3px;
+    font-size:9px;
+  }
+  .homepage-programs-section .homepage-compact-card .replica-program-actions svg{
+    width:11px;
+    height:11px;
+  }
+}
+@media(max-width:390px){
+  .homepage-programs-section .homepage-compact-card .replica-program-actions{
+    gap:5px;
+  }
+  .homepage-programs-section .homepage-compact-card .replica-program-actions .program-enrol,
+  .homepage-programs-section .homepage-compact-card .replica-program-actions .program-view{
+    padding-inline:3px;
+    font-size:8px;
+  }
+}
+
+
+/* Compact programme-card price panel: original, discount, final price only. */
+.homepage-programs-section .homepage-compact-card .replica-fee-box{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  min-height:94px!important;
+  padding:9px 13px!important;
+  gap:0!important;
+  border:1px solid #e9bd43;
+  border-radius:14px;
+  background:linear-gradient(180deg,#fff8df 0%,#fff0bd 100%);
+  box-shadow:0 7px 17px rgba(7,31,67,.09);
+}
+.homepage-programs-section .homepage-compact-card .replica-fee-box .program-price-breakdown--replica{
+  display:grid;
+  grid-template-columns:minmax(0,1fr);
+  justify-items:center;
+  gap:4px;
+  width:100%;
+  text-align:center;
+}
+.homepage-programs-section .homepage-compact-card .program-price-breakdown--replica .program-price-original{
+  width:100%;
+  justify-content:center;
+  gap:0;
+}
+.homepage-programs-section .homepage-compact-card .program-price-breakdown--replica .program-price-original del{
+  color:#788397;
+  font-size:11px;
+  font-weight:700;
+  line-height:1;
+  text-decoration-thickness:1.5px;
+  text-underline-offset:2px;
+}
+.homepage-programs-section .homepage-compact-card .program-price-breakdown--replica .program-price-discount{
+  justify-content:center;
+  gap:0;
+}
+.homepage-programs-section .homepage-compact-card .program-price-breakdown--replica .program-price-discount strong{
+  padding:3px 10px;
+  border-radius:999px;
+  background:#ffe29a;
+  color:#684a08;
+  font-size:8px;
+  font-weight:900;
+  letter-spacing:.3px;
+}
+.homepage-programs-section .homepage-compact-card .program-price-breakdown--replica .program-price-final{
+  align-items:center;
+  gap:0;
+}
+.homepage-programs-section .homepage-compact-card .program-price-breakdown--replica .program-price-final>strong{
+  color:#071f43;
+  font-size:24px;
+  font-weight:900;
+  letter-spacing:-.55px;
+  line-height:1.04;
+}
+@media(max-width:640px){
+  .homepage-programs-section .homepage-compact-card .replica-fee-box{
+    min-height:90px!important;
+    padding:8px 8px!important;
+  }
+  .homepage-programs-section .homepage-compact-card .program-price-breakdown--replica .program-price-final>strong{
+    font-size:22px;
+  }
+  .homepage-programs-section .homepage-compact-card .program-price-breakdown--replica .program-price-original del{
+    font-size:10px;
+  }
+}
+@media(max-width:390px){
+  .homepage-programs-section .homepage-compact-card .replica-fee-box{
+    min-height:86px!important;
+    padding:7px 5px!important;
+  }
+  .homepage-programs-section .homepage-compact-card .program-price-breakdown--replica .program-price-final>strong{
+    font-size:19px;
+  }
+}
+
+
+/* Refined compact programme card: balanced proportions and tighter footer. */
+.homepage-programs-section .homepage-compact-card{
+  display:flex!important;
+  flex-direction:column;
+  justify-content:flex-start!important;
+  align-items:stretch;
+  height:auto!important;
+  min-height:0!important;
+  gap:16px;
+  padding:18px 20px 16px!important;
+}
+.homepage-programs-section .homepage-compact-card .replica-program-copy{
+  width:calc(100% - 120px);
+  max-width:none;
+  min-width:0;
+}
+.homepage-programs-section .homepage-compact-card .compact-card-top{
+  gap:6px;
+  margin-bottom:11px;
+}
+.homepage-programs-section .homepage-compact-card h3{
+  max-width:285px;
+  margin:0 0 6px;
+  font-size:24px;
+  line-height:1.05;
+  letter-spacing:-.65px;
+}
+.homepage-programs-section .homepage-compact-card .replica-program-copy>p{
+  max-width:290px;
+  font-size:11.5px!important;
+  line-height:1.42!important;
+}
+.homepage-programs-section .homepage-compact-card .replica-program-art{
+  top:56px;
+  right:13px;
+  width:116px;
+  height:94px;
+}
+.homepage-programs-section .homepage-compact-card .replica-program-art.is-science{
+  top:51px;
+  right:10px;
+  width:118px;
+  height:98px;
+}
+.homepage-programs-section .homepage-compact-card .replica-program-footer{
+  grid-template-columns:minmax(0,1fr) minmax(158px,34%);
+  align-items:center;
+  gap:12px;
+}
+.homepage-programs-section .homepage-compact-card .replica-program-actions{
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  width:100%;
+  max-width:none;
+  gap:7px;
+}
+.homepage-programs-section .homepage-compact-card .replica-program-actions .program-enrol,
+.homepage-programs-section .homepage-compact-card .replica-program-actions .program-view{
+  min-height:42px;
+  gap:5px;
+  padding:8px 8px;
+  font-size:10px;
+}
+.homepage-programs-section .homepage-compact-card .replica-fee-box{
+  min-height:82px!important;
+  padding:8px 10px!important;
+  border-radius:16px;
+  gap:0!important;
+  box-shadow:0 5px 13px rgba(7,31,67,.07);
+}
+.homepage-programs-section .homepage-compact-card .program-price-breakdown--replica{
+  gap:3px;
+}
+.homepage-programs-section .homepage-compact-card .program-price-breakdown--replica .program-price-original del{
+  font-size:10px;
+}
+.homepage-programs-section .homepage-compact-card .program-price-breakdown--replica .program-price-discount strong{
+  padding:3px 9px;
+  font-size:8px;
+}
+.homepage-programs-section .homepage-compact-card .program-price-breakdown--replica .program-price-final>strong{
+  font-size:23px;
+  letter-spacing:-.45px;
+}
+@media(max-width:640px){
+  .homepage-programs-section .homepage-compact-card{
+    height:auto!important;
+    min-height:0!important;
+    gap:15px;
+    padding:17px 17px 15px!important;
+  }
+  .homepage-programs-section .homepage-compact-card .replica-program-copy{
+    width:calc(100% - 112px);
+  }
+  .homepage-programs-section .homepage-compact-card h3{
+    max-width:270px;
+    font-size:23px;
+  }
+  .homepage-programs-section .homepage-compact-card .replica-program-copy>p{
+    max-width:280px;
+    font-size:11.5px!important;
+  }
+  .homepage-programs-section .homepage-compact-card .replica-program-art{
+    top:56px;
+    right:8px;
+    width:110px;
+    height:90px;
+  }
+  .homepage-programs-section .homepage-compact-card .replica-program-art.is-science{
+    top:52px;
+    right:6px;
+    width:112px;
+    height:92px;
+  }
+  .homepage-programs-section .homepage-compact-card .replica-program-footer{
+    grid-template-columns:minmax(0,1fr) minmax(146px,36%);
+    gap:10px;
+  }
+  .homepage-programs-section .homepage-compact-card .replica-program-actions{
+    gap:6px;
+  }
+  .homepage-programs-section .homepage-compact-card .replica-program-actions .program-enrol,
+  .homepage-programs-section .homepage-compact-card .replica-program-actions .program-view{
+    min-height:40px;
+    padding:7px 6px;
+    font-size:9.5px;
+  }
+  .homepage-programs-section .homepage-compact-card .replica-fee-box{
+    min-height:80px!important;
+    padding:7px 7px!important;
+  }
+  .homepage-programs-section .homepage-compact-card .program-price-breakdown--replica .program-price-final>strong{
+    font-size:22px;
+  }
+}
+@media(max-width:390px){
+  .homepage-programs-section .homepage-compact-card{
+    height:auto!important;
+    min-height:0!important;
+    gap:14px;
+    padding:15px 13px 13px!important;
+  }
+  .homepage-programs-section .homepage-compact-card .replica-program-copy{
+    width:calc(100% - 92px);
+  }
+  .homepage-programs-section .homepage-compact-card .compact-card-top{
+    gap:4px;
+    margin-bottom:10px;
+  }
+  .homepage-programs-section .homepage-compact-card .compact-card-top>span:first-child{
+    padding:6px 8px;
+    font-size:9px;
+  }
+  .homepage-programs-section .homepage-compact-card .compact-card-top>.board-options{
+    padding:5px 6px;
+    font-size:7px;
+  }
+  .homepage-programs-section .homepage-compact-card h3{
+    max-width:205px;
+    font-size:21px;
+    line-height:1.06;
+  }
+  .homepage-programs-section .homepage-compact-card .replica-program-copy>p{
+    max-width:205px;
+    font-size:10.5px!important;
+    line-height:1.4!important;
+  }
+  .homepage-programs-section .homepage-compact-card .replica-program-art,
+  .homepage-programs-section .homepage-compact-card .replica-program-art.is-science{
+    top:55px;
+    right:5px;
+    width:92px;
+    height:80px;
+  }
+  .homepage-programs-section .homepage-compact-card .replica-program-footer{
+    grid-template-columns:minmax(0,1fr) 124px;
+    gap:7px;
+  }
+  .homepage-programs-section .homepage-compact-card .replica-program-actions{
+    gap:5px;
+  }
+  .homepage-programs-section .homepage-compact-card .replica-program-actions .program-enrol,
+  .homepage-programs-section .homepage-compact-card .replica-program-actions .program-view{
+    min-height:38px;
+    gap:3px;
+    padding:6px 3px;
+    font-size:8.5px;
+  }
+  .homepage-programs-section .homepage-compact-card .replica-fee-box{
+    min-height:76px!important;
+    padding:6px 5px!important;
+  }
+  .homepage-programs-section .homepage-compact-card .program-price-breakdown--replica .program-price-original del{
+    font-size:9px;
+  }
+  .homepage-programs-section .homepage-compact-card .program-price-breakdown--replica .program-price-final>strong{
+    font-size:20px;
+  }
+}

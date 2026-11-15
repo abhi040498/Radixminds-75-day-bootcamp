@@ -1,9 +1,10 @@
 import { ArrowRight, ArrowUpRight, MonitorPlay, Laptop2, School, Blend, CalendarCheck, UsersRound, BookOpenText, Target, RotateCw, Calculator, FlaskConical, Atom, Sigma, ClipboardCheck, ChartNoAxesColumnIncreasing } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { SectionHeading } from '../SectionHeading'
+import { ProgramPriceBreakdown } from '../ProgramPriceBreakdown'
 import { campaign } from '../../data/campaign'
 import { useProgramCatalog } from '../../lib/useProgramCatalog'
-import { formatINR, type PublicProgram } from '../../lib/enrolmentApi'
+import type { PublicProgram } from '../../lib/enrolmentApi'
 import type { ProgramCode } from '../../data/bootcampSchedule'
 
 const subjectIcons = [Calculator, FlaskConical, BookOpenText, BookOpenText]
@@ -24,7 +25,7 @@ const legacyGradeTwelveStrengths = [
   { Icon: ClipboardCheck, label: 'Topic-wise tests' }, { Icon: ChartNoAxesColumnIncreasing, label: 'Performance review' },
 ]
 
-function HomepageProgramCard({ program, index, tone, fallbackFeePaise, durationDays, listingActions = false }: { program?: PublicProgram; index: number; tone: string; subjects?: readonly string[]; fallbackFeePaise?: number; durationDays?: number; listingActions?: boolean }) {
+function HomepageProgramCard({ program, index, tone, fallbackFeePaise, fallbackStandardFeePaise, fallbackDiscountPercent }: { program?: PublicProgram; index: number; tone: string; fallbackFeePaise?: number; fallbackStandardFeePaise?: number; fallbackDiscountPercent?: number }) {
   const grade = index === 0 ? 'Class 10' : 'Class 12'
   const code = index === 0 ? 'class-10' : 'class-12'
   const title = index === 0 ? 'Build Your Strongest Foundation.' : 'Prepare for the Next Big Step.'
@@ -44,10 +45,17 @@ function HomepageProgramCard({ program, index, tone, fallbackFeePaise, durationD
       {index === 0 ? <BookStackArtwork /> : <ScienceBooksArtwork />}
     </div>
     <div className="replica-program-footer">
-      {listingActions ? <div className="program-listing-actions"><Link to={`/enrol?program=${code}`} className="program-enrol">Enroll <ArrowUpRight size={17} /></Link><Link to={`/programs/${code}`} className="program-view">Explore <ArrowRight size={16} /></Link></div> : <Link to={`/programs/${code}`} className="program-view">Explore {grade} <ArrowRight size={18} /></Link>}
+      <div className="replica-program-actions">
+        <Link to={`/enrol?program=${code}`} className="program-enrol">Enroll <ArrowUpRight size={15} /></Link>
+        <Link to={`/programs/${code}`} className="program-view">Explore <ArrowRight size={15} /></Link>
+      </div>
       <div className="replica-fee-box">
-        <strong>{formatINR(program?.payablePaise ?? fallbackFeePaise ?? 0)}</strong>
-        <span>{(program?.durationDays ?? durationDays ?? 75)}-Day Programme</span>
+        <ProgramPriceBreakdown
+          variant="replica"
+          originalPaise={program ? program.standardPaise : fallbackStandardFeePaise ?? null}
+          discountPercent={program ? program.discountPercent : fallbackDiscountPercent ?? null}
+          finalPaise={program?.payablePaise ?? fallbackFeePaise ?? 0}
+        />
       </div>
     </div>
   </article>
@@ -81,8 +89,8 @@ function ScienceBooksArtwork() {
   </svg>
 }
 
-function ProgramCard({ program, index, subjects, tone, homepage }: { program: PublicProgram; index: number; subjects: readonly string[]; tone: string; homepage: boolean }) {
-  if (homepage) return <HomepageProgramCard program={program} index={index} subjects={subjects} tone={tone} />
+function ProgramCard({ program, index, subjects, tone, homepage, fallbackStandardFeePaise, fallbackDiscountPercent }: { program: PublicProgram; index: number; subjects: readonly string[]; tone: string; homepage: boolean; fallbackStandardFeePaise?: number; fallbackDiscountPercent?: number }) {
+  if (homepage) return <HomepageProgramCard program={program} index={index} tone={tone} fallbackStandardFeePaise={fallbackStandardFeePaise} fallbackDiscountPercent={fallbackDiscountPercent} />
   const grade = index === 0 ? 'Class 10' : 'Class 12'
   const modes = new Set(program.modes.map(item => item.mode))
   const code = index === 0 ? 'class-10' : 'class-12'
@@ -100,7 +108,7 @@ function ProgramCard({ program, index, subjects, tone, homepage }: { program: Pu
       <div className="home-sunday-strip"><CalendarCheck size={22} /><div><strong>Every Sunday — Practice, Revision &amp; Doubt Clearing</strong><small>{homepage ? 'Weekly question practice and revision support.' : index === 0 ? 'Structured topic-wise preparation, guided practice and revision.' : 'Guided practice, revision and focused question-solving.'}</small></div></div>
       <div className="home-program-strengths">{strengths.map(({ Icon, label }) => <div key={label}><Icon size={19} /><strong>{label}</strong></div>)}</div>
       <div className="home-program-modes"><span><Laptop2 size={17} />Choose your learning mode</span>{(['online','hybrid','offline'] as const).map(mode => <span className={`home-mode-pill${modes.has(mode) ? ' is-available' : ' is-closed'}`} aria-label={`${mode[0].toUpperCase() + mode.slice(1)}: ${modes.has(mode) ? 'available' : 'not currently open'}`} key={mode}>{mode === 'online' ? <MonitorPlay size={14} /> : mode === 'hybrid' ? <Blend size={14} /> : <School size={14} />}{mode[0].toUpperCase() + mode.slice(1)}{!modes.has(mode) && ' · closed'}</span>)}</div>
-      <div className={`home-program-footer program-listing-footer${program.discountPercent !== null ? ' has-offer' : ''}`}><div className="home-program-ctas"><Link to={`/enrol?program=${code}`} className="program-enrol">Enroll <ArrowUpRight size={17} /></Link><Link to={index === 0 ? '/programs/class-10' : '/programs/class-12'} className="program-view">Explore <ArrowRight size={16} /></Link></div><div className="home-program-price"><span>{program.durationDays}-Day Programme</span><strong>{formatINR(program.payablePaise)}</strong>{program.discountPercent !== null && <div className="home-program-offer"><strong>{program.discountPercent}% OFF</strong><small>Offer shown from batch details</small></div>}</div></div>
+      <div className={`home-program-footer program-listing-footer${program.discountPercent !== null ? ' has-offer' : ''}`}><div className="home-program-ctas"><Link to={`/enrol?program=${code}`} className="program-enrol">Enroll Now <ArrowUpRight size={17} /></Link><Link to={index === 0 ? '/programs/class-10' : '/programs/class-12'} className="program-view">Explore <ArrowRight size={16} /></Link></div><div className="home-program-price"><span>{program.durationDays}-Day Programme</span><ProgramPriceBreakdown variant="home-card" originalPaise={program.standardPaise} discountPercent={program.discountPercent} finalPaise={program.payablePaise} /></div></div>
     </div>
   </article>
 }
@@ -129,10 +137,10 @@ export function ProgramSelection({
         </div>}
         {!loading && !homepage && programs.length > 0 && displayPrograms.length < expectedProgramCount && <div className="program-catalog-status" role="status"><span>Program details could not be loaded. Contact Radix Minds to confirm current details.</span><button type="button" onClick={retry}>Try again</button></div>}
         {homepage
-          ? campaign.programs.map((content, index) => <HomepageProgramCard key={content.code} program={programs.find(item => item.code === content.code)} index={index} tone={index === 0 ? 'program-navy' : 'program-teal'} fallbackFeePaise={content.fallbackFeePaise} durationDays={content.durationDays} />)
+        ? campaign.programs.map((content, index) => <HomepageProgramCard key={content.code} program={programs.find(item => item.code === content.code)} index={index} tone={index === 0 ? 'program-navy' : 'program-teal'} fallbackFeePaise={content.fallbackFeePaise} fallbackStandardFeePaise={content.fallbackStandardFeePaise} fallbackDiscountPercent={content.fallbackDiscountPercent} />)
           : displayPrograms.map(({ content, program, index }) => compactListings
-            ? <HomepageProgramCard key={content.code} program={program} index={index} tone={index === 0 ? 'program-navy' : 'program-teal'} fallbackFeePaise={content.fallbackFeePaise} durationDays={content.durationDays} listingActions />
-            : <ProgramCard key={content.code} program={program!} index={index} subjects={content.subjects} tone={index === 0 ? 'program-navy' : 'program-teal'} homepage={homepage} />)}</div>
+            ? <HomepageProgramCard key={content.code} program={program} index={index} tone={index === 0 ? 'program-navy' : 'program-teal'} fallbackFeePaise={content.fallbackFeePaise} fallbackStandardFeePaise={content.fallbackStandardFeePaise} fallbackDiscountPercent={content.fallbackDiscountPercent} />
+            : <ProgramCard key={content.code} program={program!} index={index} subjects={content.subjects} tone={index === 0 ? 'program-navy' : 'program-teal'} homepage={homepage} fallbackStandardFeePaise={content.fallbackStandardFeePaise} fallbackDiscountPercent={content.fallbackDiscountPercent} />)}</div>
     </div>
   </section>
 }

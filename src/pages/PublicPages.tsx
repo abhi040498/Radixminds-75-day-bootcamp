@@ -11,12 +11,13 @@ import { About } from '../components/sections/About'
 import { FAQs } from '../components/sections/FAQs'
 import { ParentTrust } from '../components/sections/ParentTrust'
 import { ProgramEnrollmentOptions } from '../components/ProgramEnrollmentOptions'
+import { ProgramPriceBreakdown } from '../components/ProgramPriceBreakdown'
 import { ProgramSelection } from '../components/sections/ProgramSelection'
 import { WeeklyTimetable } from '../components/WeeklyTimetable'
 import { bootcampDates, type ProgramCode } from '../data/bootcampSchedule'
 import { campaign } from '../data/campaign'
 import { api } from '../lib/enrolmentApi'
-import { formatINR, type PublicProgram } from '../lib/enrolmentApi'
+import { type PublicProgram } from '../lib/enrolmentApi'
 import { useProgramCatalog } from '../lib/useProgramCatalog'
 
 function PageMeta({ title, description }: { title: string; description: string }) {
@@ -205,7 +206,7 @@ function CourseFAQs({ grade }: { grade: 'CLASS 10' | 'CLASS 12' }) {
 
 function ProgramPriceFinale({ grade, index, program }: { grade: 'CLASS 10' | 'CLASS 12'; index: 0 | 1; program?: PublicProgram }) {
   const code: ProgramCode = index === 0 ? 'class-10' : 'class-12'
-  return <section className="course-price-section"><div className="page-wrap"><div className="course-price-card"><div className="course-price-copy"><span><i /> YOUR NEXT STEP · {grade}</span><h2>Ready to begin with a clear plan?</h2><p>Review the program details, choose an available learning mode and confirm any remaining questions with Radix Minds before enrolment.</p><div className="course-price-badges"><span><Clock3 size={15} /> 75-day program</span>{campaign.batchCapacity > 0 && <span><UsersRound size={15} /> Maximum {campaign.batchCapacity} students per cohort</span>}{program?.discountPercent !== null && program?.discountPercent !== undefined && <span>{program.discountPercent}% OFF configured offer</span>}</div></div><div className="course-price-panel">{program?.discountPercent !== null && program?.discountPercent !== undefined && <span className="course-price-offer">{program.discountPercent}% OFF</span>}{program ? <><strong>{formatINR(program.payablePaise)}</strong><small>program fee · from current program configuration</small></> : <><strong>Fee details unavailable</strong><small>Contact the Radix Minds team to confirm current pricing.</small></>}<Link className="button button-gold" to={`/enrol?program=${code}`}>Enrol Now <ArrowRight size={16} /></Link></div></div></div></section>
+  return <section className="course-price-section"><div className="page-wrap"><div className="course-price-card"><div className="course-price-copy"><span><i /> YOUR NEXT STEP · {grade}</span><h2>Ready to begin with a clear plan?</h2><p>Review the program details, choose an available learning mode and confirm any remaining questions with Radix Minds before enrolment.</p><div className="course-price-badges"><span><Clock3 size={15} /> 75-day program</span>{campaign.batchCapacity > 0 && <span><UsersRound size={15} /> Maximum {campaign.batchCapacity} students per cohort</span>}{program?.discountPercent !== null && program?.discountPercent !== undefined && <span>{program.discountPercent}% OFF configured offer</span>}</div></div><div className="course-price-panel">{program ? <><ProgramPriceBreakdown variant="course" originalPaise={program.standardPaise} discountPercent={program.discountPercent} finalPaise={program.payablePaise} finalLabel="Final program fee" /><small>Program fee · from current program configuration</small></> : <><strong>Fee details unavailable</strong><small>Contact the Radix Minds team to confirm current pricing.</small></>}<Link className="button button-gold" to={`/enrol?program=${code}`}>Enrol Now <ArrowRight size={16} /></Link></div></div></div></section>
 }
 
 const class10Subjects: SubjectContent[] = [

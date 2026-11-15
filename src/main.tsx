@@ -9,6 +9,7 @@ import './bootcamp.css'
 import './enhancements.css'
 import './home.css'
 import './homepage-redesign.css'
+import './pricing.css'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
